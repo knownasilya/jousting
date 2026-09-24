@@ -64,7 +64,7 @@ Your knight is saved in the browser.
 | `src/game` | Pure game logic: joust rules, AI, tournament, heraldry painter, options. No GPU, tested in Node |
 | `src/world` | The arena, terrain, woods, crowd, knights and horses, the sky panorama and image-based lighting, shared materials and the heraldry atlas |
 | `public/assets` | The HDRI sky panorama |
-| `src/fx`, `src/audio` | Particles (splinters, dust, confetti) and synthesised sound |
+| `src/fx`, `src/audio` | Particles (splinters, dust, confetti) and synthesised sound: a chattering crowd of voices, medieval music, hooves, lances and trumpets |
 | `src/ui` | Menus and the HUD |
 | `test` | `game-logic.mjs` (rules), `environment.mjs` (HDRI reader, terrain), `engine-smoke.mjs`, and headless renders of the arena and knights |
 
