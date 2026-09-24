@@ -448,7 +448,7 @@ export class App {
 		if ( you.unhorsed || them.unhorsed ) this.sound.clatter();
 		setTimeout( () => {
 
-			if ( you.unhorsed ) { this.sound.cheer( 1.6 ); this.excite = 1; } else if ( them.unhorsed ) { this.sound.groan(); this.excite = 0.7; } else if ( anyHit ) { this.sound.cheer( you.points >= 2 ? 1 : 0.6 ); this.excite = 0.6 + you.points * 0.12; }
+			if ( you.unhorsed ) { this.sound.cheer( 1.6 ); this.excite = 1; } else if ( them.unhorsed ) { this.excite = 0.7; } else if ( anyHit ) { this.sound.cheer( you.points >= 2 ? 1 : 0.6 ); this.excite = 0.6 + you.points * 0.12; }
 
 		}, 250 );
 
@@ -752,7 +752,6 @@ export class App {
 		this.particles.update( gdt, this.time );
 
 		this.arena.excitement = this.excite;
-		this.sound.setExcitement( this.excite );
 		// music: full in the menus, under the crowd between passes, barely there in the charge
 		this.sound.setMusic( this.state === 'joust' ? ( this.phase === 'charge' || this.phase === 'after' ? 0.12 : 0.4 ) : this.state === 'champion' ? 0.35 : 0.8 );
 

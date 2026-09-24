@@ -1,5 +1,5 @@
-// All sound is synthesised with WebAudio: no files to load. A crowd of chattering voices that
-// swells with excitement, a little medieval music, hoofbeats that follow the gait, the crack of a
+// All sound is synthesised with WebAudio: no files to load. A crowd that cheers, a little
+// medieval music, hoofbeats that follow the gait, the crack of a
 // lance, trumpets and a fanfare.
 
 export class Sound {
@@ -8,7 +8,6 @@ export class Sound {
 
 		this.ctx = null;
 		this.muted = false;
-		this.excite = 0.2;
 
 	}
 
@@ -61,39 +60,20 @@ export class Sound {
 	}
 
 	// ---------------------------------------------------------------- the crowd
-	// Not a hiss but people: a babble of synthesised voices. Each voice is a buzzing glottal tone
-	// through two vowel formants, speaking in syllables with pauses; pitch, pace, loudness and the
-	// number talking rise with excitement. A quiet low rumble of distant crowd and a short open-air
-	// reverb glue them together.
+	// The crowd is only heard when it cheers: a soft swell through a short open-air reverb.
 	startCrowd() {
 
 		const c = this.ctx;
 		this.crowdOut = c.createGain();
 		this.crowdOut.gain.value = 0.6;
 		const lp = c.createBiquadFilter();
-		lp.type = 'lowpass'; lp.frequency.value = 3200; lp.Q.value = 0.5;
+		lp.type = 'lowpass'; lp.frequency.value = 1800; lp.Q.value = 0.5;
 		this.crowdOut.connect( lp ).connect( this.master );
-		// reverb: a second of decaying noise as the impulse, mixed in quietly
 		const verb = c.createConvolver();
 		verb.buffer = this.makeImpulse( 1.1 );
 		const wet = c.createGain();
 		wet.gain.value = 0.35;
 		this.crowdOut.connect( verb ).connect( wet ).connect( lp );
-		// the far crowd: noise below 400 Hz, a soft rumble rather than a hiss
-		const src = this.noiseSource( true );
-		const rl = c.createBiquadFilter();
-		rl.type = 'lowpass'; rl.frequency.value = 380; rl.Q.value = 0.3;
-		const rg = c.createGain();
-		rg.gain.value = 0.05;
-		src.connect( rl ).connect( rg ).connect( lp );
-		src.start();
-		this.crowd = { rumble: rg };
-		this.voices = [];
-		for ( let i = 0; i < 20; i ++ ) this.voices.push( this.makeVoice( i ) );
-		this.cheerUntil = 0;
-		this.groanUntil = 0;
-		this.scheduleCrowd();
-		this.crowdTimer = setInterval( () => this.scheduleCrowd(), 80 );
 
 	}
 
@@ -112,109 +92,22 @@ export class Sound {
 
 	}
 
-	makeVoice( i ) {
-
-		const c = this.ctx;
-		const lady = i % 3 === 0;
-		const base = lady ? 180 + Math.random() * 60 : 95 + Math.random() * 50;
-		const o = c.createOscillator();
-		o.type = 'sawtooth';
-		o.frequency.value = base;
-		const f1 = c.createBiquadFilter(), f2 = c.createBiquadFilter(), g2 = c.createGain();
-		f1.type = f2.type = 'bandpass';
-		f1.Q.value = 5; f2.Q.value = 9;
-		g2.gain.value = 0.45;
-		const env = c.createGain();
-		env.gain.value = 0;
-		const pan = c.createStereoPanner ? c.createStereoPanner() : null;
-		o.connect( f1 ).connect( env );
-		o.connect( f2 ).connect( g2 ).connect( env );
-		if ( pan ) { pan.pan.value = Math.random() * 1.6 - 0.8; env.connect( pan ).connect( this.crowdOut ); } else env.connect( this.crowdOut );
-		o.start();
-		return { o, f1, f2, env, base, lady, next: c.currentTime + Math.random() * 0.8, vol: 0.5 + Math.random() * 0.7 };
-
-	}
-
-	// schedule the next few syllables of every voice (called every 80 ms, looks ahead 0.3 s)
-	scheduleCrowd( now = this.ctx.currentTime ) {
-
-		// vowel formants (F1, F2): ah, eh, ee, oh, oo, uh
-		const VOWELS = [ [ 780, 1250 ], [ 540, 1800 ], [ 320, 2250 ], [ 520, 900 ], [ 340, 820 ], [ 620, 1180 ] ];
-		const e = this.excite;
-		for ( const v of this.voices ) {
-
-			while ( v.next < now + 0.3 ) {
-
-				const t = Math.max( v.next, now );
-				const cheering = t < this.cheerUntil, groaning = t < this.groanUntil;
-				const talk = cheering ? 0.95 : groaning ? 0.8 : 0.3 + e * 0.55;
-				if ( Math.random() > talk ) { v.next = t + 0.25 + Math.random() * 0.9; continue; }
-				// a word of 1 to 3 syllables
-				const syllables = cheering ? 1 : 1 + Math.floor( Math.random() * 3 );
-				let at = t;
-				for ( let s = 0; s < syllables; s ++ ) {
-
-					const vw = cheering ? VOWELS[ Math.random() < 0.7 ? 0 : 1 ] : groaning ? VOWELS[ 3 + Math.floor( Math.random() * 2 ) ] : VOWELS[ Math.floor( Math.random() * VOWELS.length ) ];
-					const k = v.lady ? 1.15 : 1;
-					const dur = cheering ? 0.5 + Math.random() * 0.7 : groaning ? 0.5 + Math.random() * 0.4 : ( 0.09 + Math.random() * 0.16 ) / ( 1 + e * 0.4 );
-					const lift = cheering ? 1.55 + Math.random() * 0.3 : 1 + e * 0.35;
-					const f0 = v.base * lift * ( 0.9 + Math.random() * 0.2 );
-					// only strictly ordered, linear automation: overlapping exponential targets can
-					// run away in some WebAudio implementations
-					const rel = cheering ? 0.25 : groaning ? 0.15 : 0.04;
-					v.o.frequency.setValueAtTime( f0, at );
-					v.o.frequency.linearRampToValueAtTime( f0 * ( groaning ? 0.75 : cheering ? 1.05 : 0.93 ), at + dur + rel );
-					v.f1.frequency.setValueAtTime( vw[ 0 ] * k, at );
-					v.f2.frequency.setValueAtTime( vw[ 1 ] * k, at );
-					const level = v.vol * ( cheering ? 0.6 : groaning ? 0.35 : 0.16 + e * 0.3 );
-					v.env.gain.setValueAtTime( 0, at );
-					v.env.gain.linearRampToValueAtTime( level, at + 0.02 );
-					v.env.gain.setValueAtTime( level, at + dur );
-					v.env.gain.linearRampToValueAtTime( 0, at + dur + rel );
-					at += dur + rel + 0.01 + Math.random() * 0.05;
-
-				}
-
-				v.next = at + 0.08 + Math.random() * ( 0.5 - e * 0.35 );
-
-			}
-
-		}
-
-	}
-
-	setExcitement( e ) {
-
-		if ( ! this.ctx ) return;
-		this.excite = e;
-		this.crowd.rumble.gain.setTargetAtTime( 0.035 + e * 0.07, this.ctx.currentTime, 0.5 );
-
-	}
-
-	// a cheer: the whole crowd shouts, with a swell of distant voices under it
+	// a cheer: a swell of the crowd that rises and then settles
 	cheer( strength = 1 ) {
 
 		if ( ! this.ctx ) return;
-		const c = this.ctx, t = c.currentTime;
-		this.cheerUntil = t + 1.4 + strength;
+		const c = this.ctx, t = c.currentTime, dur = 2.8;
 		const src = this.noiseSource();
 		const lp = c.createBiquadFilter();
-		lp.type = 'lowpass'; lp.frequency.value = 900; lp.Q.value = 0.4;
+		lp.type = 'lowpass'; lp.Q.value = 0.4;
+		lp.frequency.setValueAtTime( 700, t );
+		lp.frequency.linearRampToValueAtTime( 500, t + dur );
 		const g = c.createGain();
 		g.gain.setValueAtTime( 0, t );
-		g.gain.linearRampToValueAtTime( 0.1 * strength, t + 0.3 );
-		g.gain.exponentialRampToValueAtTime( 0.001, t + 2.8 );
+		g.gain.linearRampToValueAtTime( 0.35 * strength, t + 0.3 );
+		g.gain.exponentialRampToValueAtTime( 0.001, t + dur );
 		src.connect( lp ).connect( g ).connect( this.crowdOut );
-		src.start( t ); src.stop( t + 3 );
-
-	}
-
-	// a groan: falling "ohh"s
-	groan() {
-
-		if ( ! this.ctx ) return;
-		const t = this.ctx.currentTime;
-		this.groanUntil = t + 1.6;
+		src.start( t ); src.stop( t + dur + 0.1 );
 
 	}
 
