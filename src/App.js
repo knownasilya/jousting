@@ -753,6 +753,8 @@ export class App {
 
 		this.arena.excitement = this.excite;
 		this.sound.setExcitement( this.excite );
+		// music: full in the menus, under the crowd between passes, barely there in the charge
+		this.sound.setMusic( this.state === 'joust' ? ( this.phase === 'charge' || this.phase === 'after' ? 0.12 : 0.4 ) : this.state === 'champion' ? 0.35 : 0.8 );
 
 		// fades
 		const F = this.fade;
