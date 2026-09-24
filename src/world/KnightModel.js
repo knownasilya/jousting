@@ -59,11 +59,11 @@ export function buildHorse( k ) {
 	body.add( neck );
 	k.neck = neck;
 	const neckGeo = loft( [
-		{ p: [ 0.5, 1.52, 0 ], w: 0.21, up: 0.3, down: 0.3 },
-		{ p: [ 0.72, 1.76, 0 ], w: 0.16, up: 0.22, down: 0.21, crest: 0.03 },
-		{ p: [ 0.9, 2.0, 0 ], w: 0.115, up: 0.16, down: 0.14, crest: 0.035 },
-		{ p: [ 1.02, 2.2, 0 ], w: 0.095, up: 0.12, down: 0.1 },
-		{ p: [ 1.07, 2.28, 0 ], w: 0.085, up: 0.08, down: 0.08 },
+		{ p: [ 0.48, 1.5, 0 ], w: 0.23, up: 0.33, down: 0.36 },
+		{ p: [ 0.7, 1.76, 0 ], w: 0.18, up: 0.25, down: 0.27, crest: 0.035 },
+		{ p: [ 0.88, 2.0, 0 ], w: 0.13, up: 0.18, down: 0.18, crest: 0.04 },
+		{ p: [ 1.0, 2.18, 0 ], w: 0.1, up: 0.13, down: 0.13 },
+		{ p: [ 1.07, 2.28, 0 ], w: 0.085, up: 0.08, down: 0.09 },
 	], { seg: 20, steps: 4 } );
 	neckGeo.translate( - NB[ 0 ], - NB[ 1 ], 0 );
 	mesh( neckGeo, M.coat, neck );
@@ -86,29 +86,37 @@ export function buildHorse( k ) {
 	k.head = head;
 	const headRings = [
 		{ p: [ - 0.02, 0.03, 0 ], w: 0.08, up: 0.07, down: 0.09 },
-		{ p: [ 0.05, - 0.08, 0 ], w: 0.105, up: 0.08, down: 0.17 },
-		{ p: [ 0.15, - 0.23, 0 ], w: 0.09, up: 0.075, down: 0.12 },
-		{ p: [ 0.25, - 0.38, 0 ], w: 0.075, up: 0.065, down: 0.075 },
-		{ p: [ 0.33, - 0.5, 0 ], w: 0.072, up: 0.06, down: 0.07 },
-		{ p: [ 0.37, - 0.56, 0 ], w: 0.055, up: 0.045, down: 0.05 },
+		{ p: [ 0.04, - 0.07, 0 ], w: 0.1, up: 0.08, down: 0.19 }, // the jowls
+		{ p: [ 0.12, - 0.2, 0 ], w: 0.088, up: 0.075, down: 0.13 },
+		{ p: [ 0.22, - 0.35, 0 ], w: 0.068, up: 0.065, down: 0.075 },
+		{ p: [ 0.3, - 0.47, 0 ], w: 0.07, up: 0.06, down: 0.078 }, // the muzzle
+		{ p: [ 0.34, - 0.53, 0 ], w: 0.055, up: 0.045, down: 0.055 },
 	];
-	mesh( loft( headRings.map( ( r ) => ( { ...r, n: 2.3 } ) ), { seg: 18, steps: 4 } ), M.coat, head );
+	mesh( loft( headRings.map( ( r ) => ( { ...r, n: 2.0 } ) ), { seg: 22, steps: 5 } ), M.coatHead, head );
+	for ( const z of [ - 1, 1 ] ) {
+
+		// the round cheek muscle over the jaw, and the bony brow over each eye
+		mesh( new SphereGeometry( 0.1, 16, 10 ), M.coatHead, head, { p: [ - 0.02, - 0.12, z * 0.06 ], s: [ 1, 1.05, 0.42 ], r: [ 0, 0, - 0.5 ] } );
+		mesh( new SphereGeometry( 0.032, 10, 6 ), M.coatHead, head, { p: [ 0.075, - 0.025, z * 0.088 ], s: [ 1.3, 0.8, 0.6 ] } );
+
+	}
+
 	// white blaze down the face
 	k.blaze = mesh( loft( headRings.slice( 1 ).map( ( r ) => ( { ...r, w: r.w + 0.004, up: r.up + 0.004, down: r.down + 0.004 } ) ), { seg: 10, steps: 3, arc: [ Math.PI * 0.44, Math.PI * 0.56 ] } ), S.white, head, { shadow: false } );
 	// chanfron: a steel plate over the face, with a spike and ear cups
-	k.chanfron = mesh( loft( headRings.slice( 0, 5 ).map( ( r, i ) => ( { ...r, w: r.w + 0.012, up: r.up + 0.012 + ( i === 1 ? 0.005 : 0 ), down: r.down + 0.012 } ) ), { seg: 12, steps: 3, arc: [ Math.PI * 0.3, Math.PI * 0.7 ] } ), M.armour, head );
+	k.chanfron = mesh( loft( headRings.slice( 0, 5 ).map( ( r, i ) => ( { ...r, w: r.w + 0.012, up: r.up + 0.012 + ( i === 1 ? 0.005 : 0 ), down: r.down + 0.012 } ) ), { seg: 12, steps: 3, arc: [ Math.PI * 0.36, Math.PI * 0.64 ] } ), M.armour, head );
 	mesh( new ConeGeometry( 0.025, 0.2, 8 ), M.armour, head, { p: [ 0.13, - 0.1, 0 ], r: [ 0, 0, - 0.6 ] } );
 	mesh( new SphereGeometry( 0.03, 10, 6 ), S.gold, head, { p: [ 0.11, - 0.12, 0 ] } );
 	for ( const z of [ - 1, 1 ] ) {
 
-		mesh( new ConeGeometry( 0.04, 0.15, 8 ), M.coat, head, { p: [ - 0.05, 0.12, z * 0.055 ], r: [ z * 0.25, 0, 0.35 ], s: [ 1, 1, 0.6 ] } ); // ears
+		mesh( new ConeGeometry( 0.036, 0.13, 8 ), M.coatHead, head, { p: [ - 0.04, 0.11, z * 0.05 ], r: [ z * 0.3, 0, 0.3 ], s: [ 1, 1, 0.55 ] } ); // ears
 		mesh( new SphereGeometry( 0.024, 10, 8 ), S.eye, head, { p: [ 0.06, - 0.05, z * 0.098 ], shadow: false } );
-		mesh( new SphereGeometry( 0.018, 8, 6 ), S.dark, head, { p: [ 0.37, - 0.5, z * 0.042 ], s: [ 1, 1.4, 0.6 ], shadow: false } ); // nostrils
+		mesh( new SphereGeometry( 0.018, 8, 6 ), S.dark, head, { p: [ 0.34, - 0.49, z * 0.045 ], s: [ 1, 1.4, 0.6 ], shadow: false } ); // nostrils
 
 	}
 
 	// bridle and reins
-	mesh( new TorusGeometry( 0.092, 0.01, 6, 20 ), S.leather, head, { p: [ 0.25, - 0.38, 0 ], r: [ 0, Math.PI / 2, 0.58 ], s: [ 1, 1.1, 1 ], shadow: false } );
+	mesh( new TorusGeometry( 0.085, 0.01, 6, 20 ), S.leather, head, { p: [ 0.23, - 0.37, 0 ], r: [ 0, Math.PI / 2, 0.58 ], s: [ 1, 1.1, 1 ], shadow: false } );
 	mesh( new TorusGeometry( 0.12, 0.01, 6, 20 ), S.leather, head, { p: [ 0.03, - 0.08, 0 ], r: [ 0, Math.PI / 2, 0.58 ], s: [ 1, 1.3, 1 ], shadow: false } );
 	for ( const z of [ - 1, 1 ] ) mesh( limbGeo( [ 1.36, 1.72, z * 0.075 ], [ 0.46, 1.98, z * 0.14 ], 0.006 ), S.leather, body, { shadow: false } );
 
@@ -127,12 +135,14 @@ export function buildHorse( k ) {
 		hip.add( knee );
 		if ( d.front ) {
 
-			mesh( limb( [ [ 0.02, 0.16 ], [ 0.02, - 0.08 ], [ 0.02, - 0.34 ], [ 0.02, - 0.53 ] ], [ 0.14, 0.12, 0.085, 0.075 ], 0, 0.8 ), M.coat, hip );
+			mesh( limb( [ [ 0.02, 0.16 ], [ 0.03, - 0.06 ], [ 0.025, - 0.3 ], [ 0.02, - 0.47 ], [ 0.02, - 0.53 ] ], [ 0.15, 0.13, 0.085, 0.082, 0.078 ], 0, 0.8 ), M.coat, hip );
+			mesh( new SphereGeometry( 0.07, 12, 8 ), M.coat, hip, { p: [ 0.035, - 0.52, 0 ], s: [ 0.9, 1.05, 0.95 ] } ); // the knee
 			knee.position.set( 0.02, - 0.53, 0 );
 
 		} else {
 
-			mesh( limb( [ [ 0.06, 0.18 ], [ 0.0, - 0.08 ], [ - 0.09, - 0.33 ], [ - 0.14, - 0.52 ] ], [ 0.18, 0.15, 0.095, 0.078 ], 0, 0.75 ), M.coat, hip );
+			mesh( limb( [ [ 0.06, 0.18 ], [ 0.0, - 0.08 ], [ - 0.09, - 0.33 ], [ - 0.14, - 0.52 ] ], [ 0.2, 0.16, 0.1, 0.08 ], 0, 0.75 ), M.coat, hip );
+			mesh( new SphereGeometry( 0.065, 12, 8 ), M.coat, hip, { p: [ - 0.18, - 0.5, 0 ], s: [ 1.1, 0.9, 0.8 ] } ); // the point of the hock
 			knee.position.set( - 0.14, - 0.52, 0 );
 
 		}

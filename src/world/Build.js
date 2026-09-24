@@ -2,9 +2,17 @@ import { Matrix4, Quaternion, Euler, Vector3, Color, Float32BufferAttribute, Buf
 
 // Collects primitive geometries with a transform and a colour, and merges them into one
 // vertex-coloured geometry: one draw for a whole grandstand or a pavilion.
+//
+// Colour alpha carries the surface kind (see KIND; the world materials decode it with
+// `surfaceKind( in.color.a )`). Wood picks its grain along the part's longest side.
 
 const _m = new Matrix4(), _q = new Quaternion(), _e = new Euler(), _s = new Vector3(), _p = new Vector3();
 const _c = new Color();
+
+export const KIND = { paint: 0, wood: 1, stone: 4, canvas: 5, gold: 6, iron: 7, earth: 8, foliage: 9, bark: 10 };
+// wood with its grain along x, y or z (world)
+const WOOD_AXIS = [ 1, 2, 3 ];
+export const kindAlpha = ( k ) => ( k + 0.5 ) / 16;
 
 export class Build {
 
@@ -31,10 +39,20 @@ export class Build {
 		}
 
 		const n = g.attributes.position.count;
-		const col = new Float32Array( n * 3 );
+		let kind = o.k ?? KIND.paint;
+		if ( kind === KIND.wood ) {
+
+			g.computeBoundingBox();
+			const b = g.boundingBox, dx = b.max.x - b.min.x, dy = b.max.y - b.min.y, dz = b.max.z - b.min.z;
+			kind = WOOD_AXIS[ dx >= dy && dx >= dz ? 0 : dy >= dz ? 1 : 2 ];
+
+		}
+
+		const a = kindAlpha( kind );
+		const col = new Float32Array( n * 4 );
 		_c.set( color );
-		for ( let i = 0; i < n; i ++ ) { col[ i * 3 ] = _c.r; col[ i * 3 + 1 ] = _c.g; col[ i * 3 + 2 ] = _c.b; }
-		g.setAttribute( 'color', new Float32BufferAttribute( col, 3 ) );
+		for ( let i = 0; i < n; i ++ ) { col[ i * 4 ] = _c.r; col[ i * 4 + 1 ] = _c.g; col[ i * 4 + 2 ] = _c.b; col[ i * 4 + 3 ] = a; }
+		g.setAttribute( 'color', new Float32BufferAttribute( col, 4 ) );
 		if ( o.uv && g.attributes.uv ) {
 
 			const uv = g.attributes.uv.array, [ u0, v0, u1, v1 ] = o.uv;

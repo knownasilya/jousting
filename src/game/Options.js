@@ -9,17 +9,17 @@ export const HORSES = {
 	},
 	courser: {
 		name: 'Swiftwind', breed: 'Bay courser', blurb: 'Light and fast. You will reach the tilt first, but ride with care.',
-		coat: 0x7a3f1c, mane: 0x1a120c, socks: true, blaze: true,
+		coat: 0x5c2e17, mane: 0x120c09, socks: false, points: true, blaze: true,
 		stats: { speed: 1.0, accel: 0.95, power: 0.68, steady: 0.55 },
 	},
 	andalusian: {
 		name: 'Perla', breed: 'Grey Andalusian', blurb: 'Proud and even-gaited. A steady seat for a careful lance.',
-		coat: 0xd8d4cc, mane: 0xeeeae2, socks: false, blaze: false,
+		coat: 0xcdc8be, mane: 0xe2ddd2, socks: false, blaze: false,
 		stats: { speed: 0.82, accel: 0.8, power: 0.78, steady: 1.0 },
 	},
 	chestnut: {
 		name: 'Ember', breed: 'Chestnut rouncey', blurb: 'Quick off the mark and eager. A good all-round mount.',
-		coat: 0xa0521e, mane: 0xc9803a, socks: true, blaze: true,
+		coat: 0x87451f, mane: 0xa8743e, socks: true, blaze: true,
 		stats: { speed: 0.86, accel: 1.0, power: 0.8, steady: 0.72 },
 	},
 	percheron: {
@@ -31,7 +31,7 @@ export const HORSES = {
 export const HORSE_IDS = Object.keys( HORSES );
 
 export const ARMOURS = {
-	steel: { name: 'Polished steel', color: 0xc9ccd2, metal: 1, rough: 0.22, trim: 0xd6a526 },
+	steel: { name: 'Polished steel', color: 0xb9bcc2, metal: 1, rough: 0.26, trim: 0xd6a526 },
 	gilded: { name: 'Gilded', color: 0xe0b04a, metal: 1, rough: 0.28, trim: 0xf4e1a0 },
 	blackened: { name: 'Blackened', color: 0x2a2a2e, metal: 0.85, rough: 0.4, trim: 0xb08a3a },
 	russet: { name: 'Russet', color: 0x7a4428, metal: 0.9, rough: 0.38, trim: 0xd6a526 },

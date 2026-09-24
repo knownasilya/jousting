@@ -4,8 +4,12 @@ A medieval jousting tournament for the browser. Choose your horse, paint your ar
 and helm, then ride against five champions of the realm, one after another. Beat them all and the crowd
 crowns you Champion.
 
+**Play it: https://knownasilya.github.io/jousting/** (needs a browser with WebGPU)
+
 It runs on WebGPU with a small rendering engine borrowed from [Tidewater](https://github.com/dgreenheck/tidewater).
-There are no model, texture or sound files: the knights, horses, arena, heraldry and audio are all built in code.
+The sky is a real one: a CC0 HDRI panorama from [Poly Haven](https://polyhaven.com/a/quarry_01) lights the scene
+and shows in every reflection on the plate armour. Everything else (knights, horses, crowd, woods, terrain, the
+materials, heraldry and audio) is built in code.
 
 ## Run it
 
@@ -58,10 +62,11 @@ Your knight is saved in the browser.
 | `src/engine` | The WebGPU engine from Tidewater (scene graph, materials as WGSL snippets, shadows) |
 | `src/core` | The frame renderer (shadows, haze, tone mapping) and input |
 | `src/game` | Pure game logic: joust rules, AI, tournament, heraldry painter, options. No GPU, tested in Node |
-| `src/world` | The arena, the knights and horses, shared materials and the heraldry atlas |
+| `src/world` | The arena, terrain, woods, crowd, knights and horses, the sky panorama and image-based lighting, shared materials and the heraldry atlas |
+| `public/assets` | The HDRI sky panorama |
 | `src/fx`, `src/audio` | Particles (splinters, dust, confetti) and synthesised sound |
 | `src/ui` | Menus and the HUD |
-| `test` | `game-logic.mjs` (rules), `engine-smoke.mjs`, and headless renders of the arena and knights |
+| `test` | `game-logic.mjs` (rules), `environment.mjs` (HDRI reader, terrain), `engine-smoke.mjs`, and headless renders of the arena and knights |
 
 ## Tests
 
@@ -69,7 +74,8 @@ Your knight is saved in the browser.
 npm test
 ```
 
-To render the arena or the knights to PNG files without a browser:
+To render the arena or the knights to PNG files without a browser (on a machine with no GPU, install a software
+Vulkan driver such as Mesa's lavapipe, `mesa-vulkan-drivers` on Debian and Ubuntu):
 
 ```bash
 node test/render-arena.mjs /tmp

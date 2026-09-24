@@ -1,10 +1,14 @@
 import { Group, Mesh, InstancedMesh, PlaneGeometry, BoxGeometry, CylinderGeometry, ConeGeometry, SphereGeometry, IcosahedronGeometry, Matrix4, Vector3, Quaternion, Euler, Color } from '../engine/index.js';
-import { Build } from './Build.js';
+import { Build, KIND } from './Build.js';
+import { terrainGeometry, heightAt, CASTLE } from './Terrain.js';
+import { Nature } from './Nature.js';
+import { buildCrowd } from './Crowd.js';
 import { worldMaterials, slotUV } from './Materials.js';
 import { rng as makeRng } from '../game/Rng.js';
 
 // The tournament ground: the lists (a long sandy track split by the tilt barrier), two grandstands
 // with a crowd, striped pavilions, banners of the competing houses, woods, hills and a castle.
+// The land and the woods are in Terrain.js and Nature.js.
 //
 // Axes: the tilt runs along x through the origin. The player rides +x on the +z side, the
 // opponent -x on the -z side, so each has the barrier on his left, as in a real joust.
@@ -27,12 +31,12 @@ export class Arena {
 		const M = worldMaterials();
 		this.rand = makeRng( 7 );
 
-		const ground = new Mesh( new PlaneGeometry( 1400, 1400, 1, 1 ).rotateX( - Math.PI / 2 ), M.ground );
+		const ground = new Mesh( terrainGeometry(), M.ground );
 		ground.receiveShadow = true;
 		ground.frustumCulled = false;
 		this.group.add( ground );
 
-		const sky = new Mesh( new SphereGeometry( 1500, 32, 16 ), M.sky );
+		const sky = new Mesh( new SphereGeometry( 3200, 32, 16 ), M.sky );
 		sky.frustumCulled = false;
 		this.sky = sky;
 		this.group.add( sky );
@@ -43,8 +47,21 @@ export class Arena {
 		this.buildStand( solid, cloth, banners, - LISTS.standZ, true );
 		this.buildStand( solid, cloth, banners, LISTS.standZ, false );
 		this.buildPavilions( solid, cloth, banners );
-		this.buildCastle( solid, banners );
-		this.buildNature( solid );
+		// the castle stands on its levelled mound
+		const castle = new Build(), castleBanners = new Build();
+		this.buildCastle( castle, castleBanners );
+		for ( const [ b, m ] of [ [ castle, M.vc ], [ castleBanners, M.banner ] ] ) {
+
+			const mesh = new Mesh( b.geometry(), m );
+			mesh.position.y = heightAt( CASTLE.x, CASTLE.z );
+			mesh.castShadow = mesh.receiveShadow = true;
+			mesh.frustumCulled = false;
+			this.group.add( mesh );
+
+		}
+
+		this.nature = new Nature();
+		this.group.add( this.nature.group );
 
 		for ( const [ b, m, shadow ] of [ [ solid, M.vc, true ], [ cloth, M.cloth, true ], [ banners, M.banner, true ] ] ) {
 
@@ -57,7 +74,7 @@ export class Arena {
 		}
 
 		this.crowd = this.buildCrowd();
-		this.group.add( this.crowd.bodies, this.crowd.heads );
+		this.group.add( this.crowd );
 
 	}
 
@@ -77,12 +94,12 @@ export class Arena {
 
 			const i = Math.round( ( x + H ) / seg );
 			b.add( box, i % 2 ? 0xd9c9a0 : 0x9e2226, { p: [ x + seg / 2, 0.78, 0 ], s: [ seg - 0.04, 1.0, 0.1 ] } );
-			b.add( box, WOOD_DARK, { p: [ x, 0.7, 0 ], s: [ 0.16, 1.4, 0.2 ] } );
+			b.add( box, WOOD_DARK, { k: KIND.wood, p: [ x, 0.7, 0 ], s: [ 0.16, 1.4, 0.2 ] } );
 
 		}
 
-		b.add( box, WOOD, { p: [ 0, 1.34, 0 ], s: [ 2 * H, 0.1, 0.18 ] } );
-		b.add( box, WOOD_DARK, { p: [ H, 0.7, 0 ], s: [ 0.16, 1.4, 0.2 ] } );
+		b.add( box, WOOD, { k: KIND.wood, p: [ 0, 1.34, 0 ], s: [ 2 * H, 0.1, 0.18 ] } );
+		b.add( box, WOOD_DARK, { k: KIND.wood, p: [ H, 0.7, 0 ], s: [ 0.16, 1.4, 0.2 ] } );
 
 		// tall striped poles at both ends with a pennant each
 		const pole = new CylinderGeometry( 0.07, 0.09, 1, 8 );
@@ -90,7 +107,7 @@ export class Arena {
 
 			const px = sx * ( H + 1.5 ), pz = sz * 3.8;
 			for ( let k = 0; k < 7; k ++ ) b.add( pole, k % 2 ? 0xe9e2d0 : 0x9e2226, { p: [ px, k * 0.8 + 0.4, pz ], s: [ 1, 0.8, 1 ] } );
-			b.add( new SphereGeometry( 0.14, 10, 6 ), 0xd6a526, { p: [ px, 5.7, pz ] } );
+			b.add( new SphereGeometry( 0.14, 10, 6 ), 0xd6a526, { k: KIND.gold, p: [ px, 5.7, pz ] } );
 			const slot = this.houses[ ( ( sx + 1 ) + ( sz + 1 ) / 2 ) % this.houses.length ];
 			banners.add( new PlaneGeometry( 1.0, 1.7, 6, 8 ), 0xffffff, { p: [ px + 0.6 * - sx, 4.6, pz ], r: [ 0, sx > 0 ? Math.PI : 0, 0 ], uv: slotUV( slot, - 0.1, 1.1 ) } );
 
@@ -104,16 +121,16 @@ export class Arena {
 		const L = 58, Z = 11;
 		for ( const sz of [ - 1, 1 ] ) {
 
-			for ( let x = - L; x <= L; x += 4 ) b.add( box, WOOD_DARK, { p: [ x, 0.6, sz * Z ], s: [ 0.14, 1.2, 0.14 ] } );
-			b.add( box, WOOD, { p: [ 0, 1.1, sz * Z ], s: [ 2 * L, 0.1, 0.08 ] } );
-			b.add( box, WOOD, { p: [ 0, 0.6, sz * Z ], s: [ 2 * L, 0.08, 0.06 ] } );
+			for ( let x = - L; x <= L; x += 4 ) b.add( box, WOOD_DARK, { k: KIND.wood, p: [ x, 0.6, sz * Z ], s: [ 0.14, 1.2, 0.14 ] } );
+			b.add( box, WOOD, { k: KIND.wood, p: [ 0, 1.1, sz * Z ], s: [ 2 * L, 0.1, 0.08 ] } );
+			b.add( box, WOOD, { k: KIND.wood, p: [ 0, 0.6, sz * Z ], s: [ 2 * L, 0.08, 0.06 ] } );
 
 		}
 
 		for ( const sx of [ - 1, 1 ] ) {
 
-			for ( let z = - Z; z <= Z; z += 4 ) b.add( box, WOOD_DARK, { p: [ sx * L, 0.6, z ], s: [ 0.14, 1.2, 0.14 ] } );
-			b.add( box, WOOD, { p: [ sx * L, 1.1, 0 ], s: [ 0.08, 0.1, 2 * Z ] } );
+			for ( let z = - Z; z <= Z; z += 4 ) b.add( box, WOOD_DARK, { k: KIND.wood, p: [ sx * L, 0.6, z ], s: [ 0.14, 1.2, 0.14 ] } );
+			b.add( box, WOOD, { k: KIND.wood, p: [ sx * L, 1.1, 0 ], s: [ 0.08, 0.1, 2 * Z ] } );
 
 		}
 
@@ -130,7 +147,7 @@ export class Arena {
 
 			const y = 0.9 + r * rise, zz = z + s * r * depth;
 			b.add( box, r % 2 ? WOOD : WOOD_LIGHT, { p: [ 0, y, zz ], s: [ len, 0.1, depth ] } ); // walking board
-			b.add( box, WOOD_DARK, { p: [ 0, y - rise / 2, zz - s * depth / 2 ], s: [ len, rise, 0.06 ] } ); // riser
+			b.add( box, WOOD_DARK, { k: KIND.wood, p: [ 0, y - rise / 2, zz - s * depth / 2 ], s: [ len, rise, 0.06 ] } ); // riser
 			for ( let x = - len / 2 + 0.6; x < len / 2 - 0.3; x += 0.62 ) {
 
 				if ( royal && Math.abs( x ) < 5 && r > 0 ) continue;
@@ -145,13 +162,13 @@ export class Arena {
 		// supports and the back wall
 		for ( let x = - len / 2; x <= len / 2; x += 4 ) {
 
-			b.add( box, WOOD_DARK, { p: [ x, topY / 2 + 1.2, backZ + s * 0.2 ], s: [ 0.2, topY + 2.4, 0.2 ] } );
-			b.add( box, WOOD_DARK, { p: [ x, 2.4, z - s * depth * 0.6 ], s: [ 0.18, 4.8, 0.18 ] } );
+			b.add( box, WOOD_DARK, { k: KIND.wood, p: [ x, topY / 2 + 1.2, backZ + s * 0.2 ], s: [ 0.2, topY + 2.4, 0.2 ] } );
+			b.add( box, WOOD_DARK, { k: KIND.wood, p: [ x, 2.4, z - s * depth * 0.6 ], s: [ 0.18, 4.8, 0.18 ] } );
 
 		}
 
-		b.add( box, WOOD, { p: [ 0, topY / 2 + 1, backZ + s * 0.3 ], s: [ len, topY + 2, 0.12 ] } );
-		b.add( box, WOOD, { p: [ 0, 0.45, z - s * depth * 0.55 ], s: [ len, 0.9, 0.1 ] } );
+		b.add( box, WOOD, { k: KIND.wood, p: [ 0, topY / 2 + 1, backZ + s * 0.3 ], s: [ len, topY + 2, 0.12 ] } );
+		b.add( box, WOOD, { k: KIND.wood, p: [ 0, 0.45, z - s * depth * 0.55 ], s: [ len, 0.9, 0.1 ] } );
 
 		// striped awning over the whole stand
 		const awnY = topY + 2.6;
@@ -162,9 +179,9 @@ export class Arena {
 
 			const x = - len / 2 + ( i + 0.5 ) * len / stripes;
 			const col = i % 2 ? 0xe9e2d0 : ( royal ? 0x1f3f8f : 0x9e2226 );
-			cloth.add( box, col, { p: [ x, awnY - 0.5, z + s * ( aw / 2 - depth ) ], r: [ s * pitch, 0, 0 ], s: [ len / stripes, 0.05, aw + 0.4 ] } );
+			cloth.add( box, col, { k: KIND.canvas, p: [ x, awnY - 0.5, z + s * ( aw / 2 - depth ) ], r: [ s * pitch, 0, 0 ], s: [ len / stripes, 0.05, aw + 0.4 ] } );
 			// scalloped valance along the front
-			cloth.add( new ConeGeometry( len / stripes / 2, 0.45, 3 ), col, { p: [ x, awnY - 1.45, z - s * depth * 0.65 ], r: [ Math.PI, 0, 0 ], s: [ 1, 1, 0.12 ] } );
+			cloth.add( new ConeGeometry( len / stripes / 2, 0.45, 3 ), col, { k: KIND.canvas, p: [ x, awnY - 1.45, z - s * depth * 0.65 ], r: [ Math.PI, 0, 0 ], s: [ 1, 1, 0.12 ] } );
 
 		}
 
@@ -181,18 +198,18 @@ export class Arena {
 
 			// the royal box: a raised dais, a canopy of state and two thrones
 			b.add( box, 0x6b1d24, { p: [ 0, 1.6, z + s * 1.6 ], s: [ 9, 0.2, 3.6 ] } );
-			b.add( box, 0xd6a526, { p: [ 0, 1.1, z - s * depth * 0.5 ], s: [ 9.2, 1.0, 0.12 ] } );
+			b.add( box, 0xd6a526, { k: KIND.gold, p: [ 0, 1.1, z - s * depth * 0.5 ], s: [ 9.2, 1.0, 0.12 ] } );
 			for ( const x of [ - 0.9, 0.9 ] ) {
 
 				b.add( box, 0x5a1a20, { p: [ x, 2.1, z + s * 2.0 ], s: [ 0.9, 0.9, 0.8 ] } );
-				b.add( box, 0xd6a526, { p: [ x, 2.9, z + s * 2.4 ], s: [ 0.9, 1.7, 0.12 ] } );
+				b.add( box, 0xd6a526, { k: KIND.gold, p: [ x, 2.9, z + s * 2.4 ], s: [ 0.9, 1.7, 0.12 ] } );
 
 			}
 
 			for ( let i = 0; i < 10; i ++ ) cloth.add( box, i % 2 ? 0xd6a526 : 0x6b1d24, { p: [ - 4.5 + ( i + 0.5 ) * 0.9, awnY + 0.35, z + s * 1.6 ], s: [ 0.9, 0.06, 4.4 ] } );
-			for ( const x of [ - 4.5, 4.5 ] ) b.add( new CylinderGeometry( 0.1, 0.1, awnY + 0.4, 8 ), 0xd6a526, { p: [ x, ( awnY + 0.4 ) / 2, z - s * 0.4 ] } );
+			for ( const x of [ - 4.5, 4.5 ] ) b.add( new CylinderGeometry( 0.1, 0.1, awnY + 0.4, 8 ), 0xd6a526, { k: KIND.gold, p: [ x, ( awnY + 0.4 ) / 2, z - s * 0.4 ] } );
 			// royal standard above the box
-			b.add( new CylinderGeometry( 0.06, 0.06, 5, 8 ), WOOD_DARK, { p: [ 0, awnY + 2.9, z + s * 3.2 ] } );
+			b.add( new CylinderGeometry( 0.06, 0.06, 5, 8 ), WOOD_DARK, { k: KIND.wood, p: [ 0, awnY + 2.9, z + s * 3.2 ] } );
 			banners.add( new PlaneGeometry( 2.2, 1.4, 8, 4 ), 0xffffff, { p: [ 1.15, awnY + 4.6, z + s * 3.2 ], r: [ 0, s > 0 ? Math.PI : 0, Math.PI / 2 ], s: [ 1, 1, 1 ], uv: slotUV( 7, 0, 1 ) } );
 
 		}
@@ -214,17 +231,17 @@ export class Arena {
 
 				const col = k % 2 ? c1 : c2;
 				const t0 = k * Math.PI * 2 / n, tl = Math.PI * 2 / n;
-				cloth.add( new CylinderGeometry( r, r, h, 3, 1, true, t0, tl ), col, { p: [ x, h / 2, z ] } );
-				cloth.add( new ConeGeometry( r * 1.08, rh, 3, 1, true, t0, tl ), col, { p: [ x, h + rh / 2, z ] } );
-				cloth.add( new ConeGeometry( r * 1.08 / n * 3.2, 0.5, 3 ), col, { p: [ x + Math.sin( t0 + tl / 2 ) * r * 1.07, h - 0.2, z + Math.cos( t0 + tl / 2 ) * r * 1.07 ], r: [ Math.PI, - ( t0 + tl / 2 ), 0 ], s: [ 1, 1, 0.1 ] } );
+				cloth.add( new CylinderGeometry( r, r, h, 3, 1, true, t0, tl ), col, { k: KIND.canvas, p: [ x, h / 2, z ] } );
+				cloth.add( new ConeGeometry( r * 1.08, rh, 3, 1, true, t0, tl ), col, { k: KIND.canvas, p: [ x, h + rh / 2, z ] } );
+				cloth.add( new ConeGeometry( r * 1.08 / n * 3.2, 0.5, 3 ), col, { k: KIND.canvas, p: [ x + Math.sin( t0 + tl / 2 ) * r * 1.07, h - 0.2, z + Math.cos( t0 + tl / 2 ) * r * 1.07 ], r: [ Math.PI, - ( t0 + tl / 2 ), 0 ], s: [ 1, 1, 0.1 ] } );
 
 			}
 
 			// a dark doorway, the centre pole and a pennant
 			const toC = Math.atan2( - x, - z );
 			b.add( new BoxGeometry( 1.1, 1.9, 0.05 ), 0x241810, { p: [ x + Math.sin( toC ) * r * 0.99, 0.95, z + Math.cos( toC ) * r * 0.99 ], r: [ 0, toC, 0 ] } );
-			b.add( new CylinderGeometry( 0.05, 0.05, 1.6, 6 ), WOOD_DARK, { p: [ x, h + rh + 0.7, z ] } );
-			b.add( new SphereGeometry( 0.1, 8, 6 ), 0xd6a526, { p: [ x, h + rh + 1.5, z ] } );
+			b.add( new CylinderGeometry( 0.05, 0.05, 1.6, 6 ), WOOD_DARK, { k: KIND.wood, p: [ x, h + rh + 0.7, z ] } );
+			b.add( new SphereGeometry( 0.1, 8, 6 ), 0xd6a526, { k: KIND.gold, p: [ x, h + rh + 1.5, z ] } );
 			const slot = this.houses[ i % this.houses.length ];
 			banners.add( new PlaneGeometry( 1.2, 0.7, 6, 3 ), 0xffffff, { p: [ x + 0.62, h + rh + 1.1, z ], r: [ 0, 0, Math.PI / 2 ], uv: slotUV( slot ) } );
 
@@ -239,12 +256,12 @@ export class Arena {
 		const wall = ( x0, z0, x1, z1, h ) => {
 
 			const len = Math.hypot( x1 - x0, z1 - z0 ), ang = Math.atan2( z1 - z0, x1 - x0 );
-			b.add( box, STONE, { p: [ cx + ( x0 + x1 ) / 2, h / 2, cz + ( z0 + z1 ) / 2 ], r: [ 0, - ang, 0 ], s: [ len, h, 3 ] } );
+			b.add( box, STONE, { k: KIND.stone, p: [ cx + ( x0 + x1 ) / 2, h / 2, cz + ( z0 + z1 ) / 2 ], r: [ 0, - ang, 0 ], s: [ len, h, 3 ] } );
 			const n = Math.floor( len / 2.2 );
 			for ( let i = 0; i < n; i ++ ) {
 
 				const t = ( i + 0.5 ) / n;
-				b.add( box, STONE_DARK, { p: [ cx + x0 + ( x1 - x0 ) * t, h + 0.6, cz + z0 + ( z1 - z0 ) * t ], r: [ 0, - ang, 0 ], s: [ 1.2, 1.2, 3.2 ] } );
+				b.add( box, STONE_DARK, { k: KIND.stone, p: [ cx + x0 + ( x1 - x0 ) * t, h + 0.6, cz + z0 + ( z1 - z0 ) * t ], r: [ 0, - ang, 0 ], s: [ 1.2, 1.2, 3.2 ] } );
 
 			}
 
@@ -252,16 +269,16 @@ export class Arena {
 
 		const tower = ( x, z, r, h, slot ) => {
 
-			b.add( new CylinderGeometry( r, r * 1.1, h, 16 ), STONE, { p: [ cx + x, h / 2, cz + z ] } );
+			b.add( new CylinderGeometry( r, r * 1.1, h, 16 ), STONE, { k: KIND.stone, p: [ cx + x, h / 2, cz + z ] } );
 			for ( let k = 0; k < 10; k ++ ) {
 
 				const a = k * Math.PI / 5;
-				b.add( box, STONE_DARK, { p: [ cx + x + Math.cos( a ) * r * 1.02, h + 0.6, cz + z + Math.sin( a ) * r * 1.02 ], r: [ 0, - a, 0 ], s: [ 1, 1.2, 1.3 ] } );
+				b.add( box, STONE_DARK, { k: KIND.stone, p: [ cx + x + Math.cos( a ) * r * 1.02, h + 0.6, cz + z + Math.sin( a ) * r * 1.02 ], r: [ 0, - a, 0 ], s: [ 1, 1.2, 1.3 ] } );
 
 			}
 
 			b.add( new ConeGeometry( r * 1.15, r * 2.2, 16 ), SLATE, { p: [ cx + x, h + 1.2 + r * 1.1, cz + z ] } );
-			b.add( new CylinderGeometry( 0.12, 0.12, 5, 6 ), WOOD_DARK, { p: [ cx + x, h + 1.2 + r * 2.2 + 2, cz + z ] } );
+			b.add( new CylinderGeometry( 0.12, 0.12, 5, 6 ), WOOD_DARK, { k: KIND.wood, p: [ cx + x, h + 1.2 + r * 2.2 + 2, cz + z ] } );
 			banners.add( new PlaneGeometry( 4, 2.4, 8, 4 ), 0xffffff, { p: [ cx + x + 2.1, h + r * 2.2 + 3.4, cz + z ], r: [ 0, 0, Math.PI / 2 ], uv: slotUV( slot ) } );
 			// arrow slits
 			for ( let k = 0; k < 3; k ++ ) b.add( box, 0x1a1612, { p: [ cx + x, h * ( 0.35 + k * 0.2 ), cz + z + r * 1.02 ], s: [ 0.35, 1.3, 0.2 ] } );
@@ -272,112 +289,28 @@ export class Arena {
 		wall( - W, D, W, D, h ); wall( - W, - D, W, - D, h ); wall( - W, - D, - W, D, h ); wall( W, - D, W, D, h );
 		tower( - W, D, 5, 22, 7 ); tower( W, D, 5, 22, 7 ); tower( - W, - D, 5, 20, 7 ); tower( W, - D, 5, 20, 7 );
 		// the gatehouse and the keep
-		b.add( box, STONE, { p: [ cx, 9, cz + D + 2 ], s: [ 12, 18, 6 ] } );
+		b.add( box, STONE, { k: KIND.stone, p: [ cx, 9, cz + D + 2 ], s: [ 12, 18, 6 ] } );
 		b.add( box, 0x221a12, { p: [ cx, 3.5, cz + D + 5.05 ], s: [ 5, 7, 0.2 ] } );
 		tower( - 7, D + 3, 3.4, 20, 7 ); tower( 7, D + 3, 3.4, 20, 7 );
-		b.add( box, STONE, { p: [ cx - 4, 17, cz - 4 ], s: [ 20, 34, 18 ] } );
-		for ( let i = 0; i < 8; i ++ ) b.add( box, STONE_DARK, { p: [ cx - 13 + i * 2.6, 34.7, cz + 5.2 ], s: [ 1.3, 1.4, 1.2 ] } );
+		b.add( box, STONE, { k: KIND.stone, p: [ cx - 4, 17, cz - 4 ], s: [ 20, 34, 18 ] } );
+		for ( let i = 0; i < 8; i ++ ) b.add( box, STONE_DARK, { k: KIND.stone, p: [ cx - 13 + i * 2.6, 34.7, cz + 5.2 ], s: [ 1.3, 1.4, 1.2 ] } );
 		tower( 6, - 12, 4.5, 44, 7 );
-
-	}
-
-	buildNature( b ) {
-
-		const R = this.rand;
-		const trunk = new CylinderGeometry( 0.25, 0.4, 1, 6 );
-		const blob = new IcosahedronGeometry( 1, 1 );
-		const cone = new ConeGeometry( 1, 1, 8 );
-		const greens = [ 0x3d6b2a, 0x4a7a30, 0x2f5a26, 0x567f36, 0x355f2c ];
-		for ( let i = 0; i < 520; i ++ ) {
-
-			const a = R() * Math.PI * 2, d = 85 + Math.pow( R(), 0.7 ) * 330;
-			const x = Math.cos( a ) * d, z = Math.sin( a ) * d;
-			if ( Math.hypot( x - 60, z + 190 ) < 60 ) continue; // the castle
-			if ( z < - 120 && Math.abs( x - 60 ) < 30 ) continue; // the road to the gate
-			const s = 0.8 + R() * 0.8;
-			const col = greens[ Math.floor( R() * greens.length ) ];
-			if ( R() < 0.35 ) {
-
-				b.add( trunk, WOOD_DARK, { p: [ x, 1.2 * s, z ], s: [ s, 2.4 * s, s ] } );
-				b.add( cone, col, { p: [ x, 5 * s, z ], s: [ 2.4 * s, 7.5 * s, 2.4 * s ] } );
-
-			} else {
-
-				b.add( trunk, WOOD_DARK, { p: [ x, 1.6 * s, z ], s: [ s, 3.2 * s, s ] } );
-				b.add( blob, col, { p: [ x, 4.6 * s, z ], s: [ 2.8 * s, 2.4 * s, 2.8 * s ], r: [ R(), R(), 0 ] } );
-				b.add( blob, col, { p: [ x + 1.2 * s, 4 * s, z + 0.6 * s ], s: [ 1.9 * s, 1.7 * s, 1.9 * s ] } );
-
-			}
-
-		}
-
-		// rolling hills on the horizon
-		const hill = new SphereGeometry( 1, 24, 10, 0, Math.PI * 2, 0, Math.PI / 2 );
-		for ( let i = 0; i < 18; i ++ ) {
-
-			const a = i / 18 * Math.PI * 2 + R() * 0.2, d = 560 + R() * 180;
-			b.add( hill, [ 0x4f6e3a, 0x5b7a42, 0x46663a ][ i % 3 ], { p: [ Math.cos( a ) * d, - 4, Math.sin( a ) * d ], s: [ 180 + R() * 120, 40 + R() * 50, 140 + R() * 80 ] } );
-
-		}
-
-		// the road from the castle gate to the lists
-		const box = new BoxGeometry( 1, 1, 1 );
-		for ( let i = 0; i < 16; i ++ ) b.add( box, 0x8a7550, { p: [ 60 - i * 1.2, 0.02, - 160 + i * 8.5 ], r: [ 0, 0.14, 0 ], s: [ 5, 0.04, 9 ] } );
 
 	}
 
 	buildCrowd() {
 
-		const M = worldMaterials();
 		const R = makeRng( 99 );
 		const spots = [ ...this.seats ];
 		// commoners standing along the lists fences
-		for ( const sz of [ - 1, 1 ] ) for ( let x = - 55; x < 55; x += 0.8 ) {
+		for ( const sz of [ - 1, 1 ] ) for ( let x = - 55; x < 55; x += 0.7 ) {
 
-			if ( Math.abs( x ) < 24 || R() < 0.35 ) continue;
-			spots.push( [ x + R() * 0.3, 0, sz * ( 11.8 + R() * 1.6 ), sz ] );
-
-		}
-
-		const n = spots.length;
-		// body: torso, and arms that the shader raises when the crowd cheers
-		const body = new Build();
-		body.add( new CylinderGeometry( 0.16, 0.22, 0.62, 8 ), 0xffffff, { p: [ 0, 0.31, 0 ] } );
-		body.add( new CylinderGeometry( 0.2, 0.2, 0.5, 8 ), 0xb0a090, { p: [ 0, - 0.2, 0 ] } );
-		for ( const sx of [ - 1, 1 ] ) body.add( new CylinderGeometry( 0.05, 0.05, 0.62, 6 ), 0xffffff, { p: [ sx * 0.22, 0.9, 0 ], r: [ 0, 0, sx * 0.3 ] } );
-		const headB = new Build();
-		headB.add( new SphereGeometry( 0.13, 10, 8 ), 0xffffff, { p: [ 0, 0.76, 0 ] } );
-		headB.add( new SphereGeometry( 0.135, 10, 6, 0, Math.PI * 2, 0, Math.PI / 2 ), 0x4a3020, { p: [ 0, 0.79, 0 ] } );
-
-		const bodies = new InstancedMesh( body.geometry(), M.crowd, n );
-		const heads = new InstancedMesh( headB.geometry(), M.crowd, n );
-		const m = new Matrix4(), q = new Quaternion(), e = new Euler(), p = new Vector3(), s = new Vector3();
-		const cloth = [ 0x9e2226, 0x1f3f8f, 0x2b6b3a, 0xd6a526, 0x6b2a7a, 0x7a5a3a, 0x3a3a3a, 0xc8b89a, 0x2a5a7a, 0x8a3a1a ];
-		const skins = [ 0xf0c8a8, 0xd9a882, 0xb07850, 0x7a4a2a, 0xe8b894 ];
-		const c = new Color();
-		for ( let i = 0; i < n; i ++ ) {
-
-			const [ x, y, z, sz ] = spots[ i ];
-			p.set( x, y + ( y > 0 ? 0.28 : 0.72 ), z );
-			q.setFromEuler( e.set( 0, ( sz > 0 ? Math.PI : 0 ) + ( R() - 0.5 ) * 0.5, 0 ) );
-			const k = 0.9 + R() * 0.2;
-			m.compose( p, q, s.set( k, k, k ) );
-			bodies.setMatrixAt( i, m );
-			heads.setMatrixAt( i, m );
-			bodies.setColorAt( i, c.set( cloth[ Math.floor( R() * cloth.length ) ] ) );
-			heads.setColorAt( i, c.set( skins[ Math.floor( R() * skins.length ) ] ) );
+			if ( Math.abs( x ) < 24 || R() < 0.3 ) continue;
+			spots.push( [ x + R() * 0.3, 0, sz * ( 11.7 + R() * 1.8 ), sz ] );
 
 		}
 
-		for ( const im of [ bodies, heads ] ) {
-
-			im.frustumCulled = false;
-			im.castShadow = true;
-			im.receiveShadow = true;
-
-		}
-
-		return { bodies, heads, count: n };
+		return buildCrowd( spots, worldMaterials().crowd );
 
 	}
 
