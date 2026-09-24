@@ -2,6 +2,7 @@ import { GPU, G } from './engine/webgpu.js';
 import { Engine } from './engine/Engine.js';
 import { Vector3, MathUtils } from './engine/index.js';
 import { Renderer } from './core/Renderer.js';
+import { loadEnvironment } from './world/Environment.js';
 import { Input } from './core/Input.js';
 import { Arena } from './world/Arena.js';
 import { Knight } from './world/Knight.js';
@@ -72,6 +73,17 @@ export class App {
 		resize();
 		this.input = new Input( this.engine.canvas );
 		this.sound = new Sound();
+
+		progress( 0.12, 'Reading the sky…' );
+		try {
+
+			G.horizonColor.value.copy( ( await loadEnvironment() ).horizon );
+
+		} catch ( e ) {
+
+			console.warn( 'Sky panorama not loaded, using a plain sky:', e.message );
+
+		}
 
 		progress( 0.2, 'Painting the banners…' );
 		try { this.hadSave = !! localStorage.getItem( SAVE_KEY ); } catch ( e ) { /* no storage */ }

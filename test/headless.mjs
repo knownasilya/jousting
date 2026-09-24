@@ -1,11 +1,19 @@
 // Headless WebGPU (Dawn via the `webgpu` npm package) for engine tests.
 import { create, globals } from 'webgpu';
-import { writeFileSync } from 'node:fs';
+import { writeFileSync, readFileSync } from 'node:fs';
 import { deflateSync } from 'node:zlib';
 
 Object.assign( globalThis, globals );
 Object.defineProperty( globalThis, 'navigator', { value: { gpu: create( [] ) }, configurable: true } );
 globalThis.location = { search: '' };
+
+// game assets ('./assets/...') come from public/
+globalThis.__assetFile = async ( url ) => {
+
+	const b = readFileSync( new URL( '../public/' + url.replace( /^\.?\//, '' ), import.meta.url ) );
+	return b.buffer.slice( b.byteOffset, b.byteOffset + b.byteLength );
+
+};
 
 // minimal RGBA8 PNG writer
 export function writePNG( path, width, height, rgba ) {

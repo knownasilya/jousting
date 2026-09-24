@@ -173,12 +173,20 @@ export class Knight {
 			`,
 		} );
 		this.mats = {
+			// plate: polished along each piece, with fine scratches, hammer marks and a little grime;
+			// worked out in the piece's own space so it does not swim as the knight rides
 			armour: new Material( { name: 'armour', color: 0xcccccc, metalness: 1, roughness: 0.25,
+				varyings: { vLocal: 'vec3f' },
+				vertex: 'o.vLocal = v.position;',
 				surface: /* wgsl */`
-					// hammered plate: roughness and tone vary a little over the surface
-					let n = mx_noise_float3( in.P * 14.0 ) * 0.5 + 0.5;
-					s.roughness = clamp( mat.roughness * ( 0.75 + 0.5 * n ), 0.05, 1.0 );
-					s.albedo *= 0.92 + 0.08 * n;
+					let q = in.vs.vLocal;
+					let n = mx_noise_float3( q * 14.0 ) * 0.5 + 0.5;
+					let scratch = mx_noise_float3( vec3f( q.x * 3.0, q.y * 160.0, q.z * 160.0 ) ) * 0.5 + 0.5;
+					let dent = mx_noise_float3( q * 38.0 );
+					s.roughness = clamp( mat.roughness * ( 0.7 + 0.45 * n + 0.35 * scratch ), 0.08, 1.0 );
+					s.albedo *= ( 0.88 + 0.12 * n ) * ( 0.96 + 0.04 * scratch );
+					s.ao = 0.75 + 0.25 * smoothstep( -0.4, 0.4, mx_noise_float3( q * 5.0 ) );
+					s.normal = normalize( s.normal + vec3f( dent, mx_noise_float3( q * 38.0 + 7.0 ), mx_noise_float3( q * 38.0 + 13.0 ) ) * 0.05 );
 				`,
 			} ),
 			mantling: new Material( { name: 'mantling', roughness: 0.85, side: 'double',
@@ -205,17 +213,40 @@ export class Knight {
 					s.albedo = t.rgb * ( 0.8 + 0.2 * smoothstep( 0.0, 0.12, e ) );
 				`,
 			} ),
+			// the coat: short glossy hair over muscle. Fine hair streaks and a soft sheen; the normal
+			// rolls gently over the muscles; dapples for the greys (local space, so nothing swims)
 			coat: new Material( {
-				name: 'coat', roughness: 0.5, uniforms: { dapple: [ 'f32', 0 ] },
+				name: 'coat', roughness: 0.48, uniforms: { dapple: [ 'f32', 0 ] },
+				varyings: { vLocal: 'vec3f' },
+				vertex: 'o.vLocal = v.position;',
 				surface: /* wgsl */`
-					let n = mx_noise_float3( in.P * 9.0 ) * 0.5 + 0.5;
+					let q = in.vs.vLocal;
+					let n = mx_noise_float3( q * 9.0 ) * 0.5 + 0.5;
 					let spots = smoothstep( 0.45, 0.62, n );
 					s.albedo = s.albedo * mix( 1.0, 0.7 + 0.6 * spots, mat.dapple );
-					s.sheenColor = s.albedo * 0.6;
-					s.sheenRoughness = 0.5;
+					let hair = mx_noise_float3( vec3f( q.x * 25.0, q.y * 260.0, q.z * 260.0 ) ) * 0.5 + 0.5;
+					let tone = mx_noise_float3( q * 2.2 + 4.0 ) * 0.5 + 0.5;
+					s.albedo *= ( 0.9 + 0.1 * hair ) * ( 0.85 + 0.3 * tone );
+					let m = vec3f( mx_noise_float3( q * 3.5 ), mx_noise_float3( q * 3.5 + 11.0 ), mx_noise_float3( q * 3.5 + 23.0 ) );
+					s.normal = normalize( s.normal + m * 0.22 );
+					s.roughness = mat.roughness * ( 0.85 + 0.3 * hair );
+					s.sheenColor = s.albedo * 0.9 + vec3f( 0.04 );
+					s.sheenRoughness = 0.4;
 				`,
 			} ),
-			mane: new Material( { name: 'mane', roughness: 0.75 } ),
+			// mane and tail: coarse hair in strands
+			mane: new Material( { name: 'mane', roughness: 0.6,
+				varyings: { vLocal: 'vec3f' },
+				vertex: 'o.vLocal = v.position;',
+				surface: /* wgsl */`
+					let q = in.vs.vLocal;
+					let st = mx_noise_float3( vec3f( q.x * 90.0, q.y * 6.0, q.z * 90.0 ) ) * 0.5 + 0.5;
+					s.albedo *= 0.6 + 0.6 * st;
+					s.roughness = 0.45 + 0.3 * st;
+					s.sheenColor = s.albedo * 0.8;
+					s.sheenRoughness = 0.35;
+				`,
+			} ),
 			socks: new Material( { name: 'socks', roughness: 0.6 } ),
 			skin: new Material( { name: 'skin', roughness: 0.55 } ),
 			hair: new Material( { name: 'hair', roughness: 0.8 } ),
@@ -226,6 +257,11 @@ export class Knight {
 				surface: /* wgsl */`
 					let k = step( 0.5, fract( in.uv.y * 14.0 + in.uv.x ) );
 					s.albedo = mix( mat.c1, mat.c2, k );
+					// painted ash: the grain shows through, the paint is scuffed along the shaft
+					let g = mx_noise_float2( vec2f( in.uv.x * 40.0, in.uv.y * 400.0 ) ) * 0.5 + 0.5;
+					let wear = smoothstep( 0.55, 0.8, mx_noise_float2( vec2f( in.uv.x * 12.0, in.uv.y * 90.0 ) ) * 0.5 + 0.5 );
+					s.albedo = mix( s.albedo * ( 0.9 + 0.1 * g ), vec3f( 0.42, 0.3, 0.18 ) * ( 0.8 + 0.3 * g ), wear * 0.7 );
+					s.roughness = mix( 0.45, 0.8, wear );
 				`,
 			} ),
 		};
@@ -265,7 +301,7 @@ export class Knight {
 		M.coat.uniforms.color.value.set( horse.coat );
 		M.coat.uniforms.dapple.value = horse.dapple ? 1 : 0;
 		M.mane.uniforms.color.value.set( horse.mane );
-		M.socks.uniforms.color.value.set( horse.socks ? 0xece6da : horse.coat );
+		M.socks.uniforms.color.value.set( horse.socks ? 0xd8d2c6 : horse.points ? 0x16110e : horse.coat );
 		this.blaze.visible = !! horse.blaze;
 		M.armour.uniforms.color.value.set( arm.color );
 		M.armour.uniforms.metalness.value = arm.metal;

@@ -3,6 +3,7 @@ import { writePNG } from './headless.mjs';
 import { GPU, RenderTarget, readTexture, G } from '../src/engine/webgpu.js';
 import { Scene, PerspectiveCamera, Vector3 } from '../src/engine/index.js';
 import { Renderer } from '../src/core/Renderer.js';
+import { loadEnvironment } from '../src/world/Environment.js';
 import { Arena } from '../src/world/Arena.js';
 import { Knight } from '../src/world/Knight.js';
 import { setAtlasArms } from '../src/world/Materials.js';
@@ -27,6 +28,7 @@ all.forEach( ( o, i ) => {
 	knights.push( k );
 } );
 const renderer = new Renderer( { outputFormat: 'rgba8unorm' } );
+G.horizonColor.value.copy( ( await loadEnvironment() ).horizon );
 renderer.setSize( W, H );
 const ldr = new RenderTarget( W, H, { colors: [ 'rgba8unorm' ], label: 'ldr', usage: [ 'render', 'copySrc', 'sample' ] } );
 const camera = new PerspectiveCamera( 50, W / H, 0.1, 4000 );

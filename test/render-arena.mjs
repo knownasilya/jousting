@@ -4,6 +4,7 @@ import { writePNG } from './headless.mjs';
 import { GPU, RenderTarget, readTexture, G } from '../src/engine/webgpu.js';
 import { Scene, PerspectiveCamera } from '../src/engine/index.js';
 import { Renderer } from '../src/core/Renderer.js';
+import { loadEnvironment } from '../src/world/Environment.js';
 import { Arena } from '../src/world/Arena.js';
 import { setAtlasArms } from '../src/world/Materials.js';
 import { randomArms } from '../src/game/Heraldry.js';
@@ -19,6 +20,7 @@ const arena = new Arena();
 scene.add( arena.group );
 const extra = globalThis.__extraScene;
 const renderer = new Renderer( { outputFormat: 'rgba8unorm' } );
+G.horizonColor.value.copy( ( await loadEnvironment() ).horizon );
 renderer.setSize( W, H );
 const ldr = new RenderTarget( W, H, { colors: [ 'rgba8unorm' ], label: 'ldr', usage: [ 'render', 'copySrc', 'sample' ] } );
 const camera = new PerspectiveCamera( 60, W / H, 0.1, 4000 );
@@ -27,6 +29,8 @@ const shots = {
 	rider: [ [ - 43, 3.4, 2.8 ], [ - 30, 2.2, 0 ] ],
 	stand: [ [ 0, 2, 6 ], [ 0, 4, - 20 ] ],
 	castle: [ [ 0, 6, 10 ], [ 60, 20, - 190 ] ],
+	crowd: [ [ - 8, 2.4, 9 ], [ - 4, 2.2, 20 ] ],
+	tilt: [ [ - 20, 1.6, 4 ], [ - 10, 1.0, 0 ] ],
 };
 for ( const [ name, [ p, t ] ] of Object.entries( shots ) ) {
 	camera.position.set( ...p ); camera.lookAt( ...t );
