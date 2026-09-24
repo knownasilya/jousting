@@ -9,8 +9,8 @@ let fails = 0;
 const ok = ( c, msg ) => { if ( ! c ) { fails ++; console.log( 'FAIL', msg ); } else console.log( 'ok  ', msg ); };
 
 // ---- zones
-ok( zoneAt( 0, 2.64 ).zone === 'helm', 'centre of the helm is a helm hit' );
-ok( zoneAt( 0.3, 2.28 ).zone === 'shield', 'the shield covers the left side' );
+ok( zoneAt( 0, 2.7 ).zone === 'helm', 'centre of the helm is a helm hit' );
+ok( zoneAt( 0.3, 2.32 ).zone === 'shield', 'the shield covers the left side' );
 ok( zoneAt( - 0.1, 2.1 ).zone === 'body', 'the right breast is open' );
 ok( zoneAt( - 0.1, 2.1, 1 ).zone === 'shield', 'a braced shield covers the breast' );
 ok( zoneAt( 0, 3.3 ).zone === 'miss' && zoneAt( 0.9, 2.2 ).zone === 'miss', 'wide and high points miss' );
@@ -41,14 +41,14 @@ ok( braceQuality( 0.1 ) === 1 && braceQuality( 0.4 ) === 0.6 && braceQuality( 0.
 	const fast = Object.assign( new Rider( HORSES.destrier ), { speed: 11 } ), def = Object.assign( new Rider( HORSES.courser ), { speed: 11 } );
 	let falls = 0, braced = 0;
 	for ( let i = 0; i < 4000; i ++ ) {
-		if ( resolveStrike( { h: 0, y: 2.64, attacker: fast, defender: def, rng: R } ).unhorsed ) falls ++;
-		if ( resolveStrike( { h: 0, y: 2.64, attacker: fast, defender: def, brace: 1, rng: R } ).unhorsed ) braced ++;
+		if ( resolveStrike( { h: 0, y: 2.7, attacker: fast, defender: def, rng: R } ).unhorsed ) falls ++;
+		if ( resolveStrike( { h: 0, y: 2.7, attacker: fast, defender: def, brace: 1, rng: R } ).unhorsed ) braced ++;
 	}
 	ok( falls > 1000 && falls < 3000, `a fast helm strike often unhorses (${ ( falls / 40 ).toFixed( 0 ) }%)` );
 	ok( braced < falls * 0.5, `bracing halves the risk (${ ( braced / 40 ).toFixed( 0 ) }%)` );
 	const slow = Object.assign( new Rider( HORSES.destrier ), { speed: 3 } );
 	let slowFalls = 0;
-	for ( let i = 0; i < 4000; i ++ ) if ( resolveStrike( { h: 0, y: 2.64, attacker: slow, defender: def, rng: R } ).unhorsed ) slowFalls ++;
+	for ( let i = 0; i < 4000; i ++ ) if ( resolveStrike( { h: 0, y: 2.7, attacker: slow, defender: def, rng: R } ).unhorsed ) slowFalls ++;
 	ok( slowFalls < falls * 0.6, 'a slow strike unhorses less' );
 	ok( resolveStrike( { h: 2, y: 2, attacker: fast, defender: def, rng: R } ).points === 0, 'a miss scores nothing' );
 }
@@ -93,7 +93,7 @@ ok( braceQuality( 0.1 ) === 1 && braceQuality( 0.4 ) === 0.6 && braceQuality( 0.
 			const you = Object.assign( new Rider( HORSES.chestnut ), { speed: 11 } ), them = Object.assign( new Rider( HORSES[ o.horse ] ), { speed: 10 + o.skill * 2 } );
 			while ( ! b.over ) {
 				const p = aiPlan( o.skill, R );
-				const mine = { h: 0.02 + gauss( R ) * 0.1, y: 2.15 + gauss( R ) * 0.1 };
+				const mine = { h: 0.02 + gauss( R ) * 0.1, y: 2.19 + gauss( R ) * 0.1 };
 				const a = resolveStrike( { ...mine, attacker: you, defender: them, brace: p.brace ? 0.6 : 0, rng: R } );
 				const d = resolveStrike( { h: p.h, y: p.y, attacker: them, defender: you, brace: R() < 0.6 ? 1 : 0, rng: R } );
 				b.record( a, d );

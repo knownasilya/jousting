@@ -16,9 +16,9 @@ export const LIST = {
 };
 
 export const ZONES = {
-	helm: { name: 'Helm', points: 3, unhorse: 0.34, center: [ 0.0, 2.64 ] },
-	body: { name: 'Breastplate', points: 2, unhorse: 0.17, center: [ 0.0, 2.12 ] },
-	shield: { name: 'Shield', points: 1, unhorse: 0.07, center: [ 0.3, 2.28 ] },
+	helm: { name: 'Helm', points: 3, unhorse: 0.34, center: [ 0.0, 2.7 ] },
+	body: { name: 'Breastplate', points: 2, unhorse: 0.17, center: [ 0.0, 2.16 ] },
+	shield: { name: 'Shield', points: 1, unhorse: 0.07, center: [ 0.3, 2.32 ] },
 	miss: { name: 'Miss', points: 0, unhorse: 0, center: [ 0, 0 ] },
 };
 
@@ -28,17 +28,17 @@ export const MAX_PASSES = 7;
 // which part of the defender a point strikes; a braced shield swings across the body
 export function zoneAt( h, y, brace = 0 ) {
 
-	const dh = h - 0.0, dy = y - 2.64;
+	const dh = h - 0.0, dy = y - 2.7;
 	if ( dh * dh + dy * dy < 0.15 * 0.15 ) return { zone: 'helm', centred: 1 - Math.hypot( dh, dy ) / 0.15 };
-	const sh0 = 0.08 - brace * 0.22, sy1 = 2.6 + brace * 0.06;
-	if ( h > sh0 && h < 0.52 && y > 1.96 && y < sy1 ) {
+	const sh0 = 0.08 - brace * 0.22, sy1 = 2.64 + brace * 0.06;
+	if ( h > sh0 && h < 0.52 && y > 2.0 && y < sy1 ) {
 
 		const c = ZONES.shield.center;
 		return { zone: 'shield', centred: Math.max( 0, 1 - Math.hypot( h - c[ 0 ], y - c[ 1 ] ) / 0.32 ) };
 
 	}
 
-	if ( Math.abs( h ) < 0.25 && y > 1.72 && y < 2.5 ) {
+	if ( Math.abs( h ) < 0.25 && y > 1.76 && y < 2.55 ) {
 
 		const c = ZONES.body.center;
 		return { zone: 'body', centred: Math.max( 0, 1 - Math.hypot( h - c[ 0 ], y - c[ 1 ] ) / 0.4 ) };

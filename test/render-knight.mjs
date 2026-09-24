@@ -44,6 +44,14 @@ async function shot( name, p, t, setup ) {
 }
 await shot( 'lineup', [ 0, 2.4, 12 ], [ 0, 1.6, 4 ] );
 await shot( 'close', [ - 5.5, 2.4, 7.2 ], [ - 7.6, 2.0, 4 ] );
+// side view and a helm close-up, with the others moved out of the way
+for ( const k of knights.slice( 1 ) ) k.group.position.y = - 50;
+knights[ 0 ].group.rotation.y = 0;
+knights[ 0 ].lance.visible = false;
+await shot( 'side', [ - 8, 1.8, 9.5 ], [ - 8, 1.4, 4 ] );
+await shot( 'rider', [ - 6.2, 2.8, 5.6 ], [ - 7.9, 2.3, 4 ] );
+knights[ 0 ].lance.visible = true;
+for ( const k of knights.slice( 1 ) ) k.group.position.y = 0;
 // gallop: knight 0 at speed, lance couched toward a point
 const k0 = knights[ 0 ];
 await shot( 'gallop', [ - 3, 2.2, 9 ], [ - 8, 1.6, 4 ], () => { k0.speed = 11; k0.lanceAim = new Vector3( 0, 2.3, 0 ); for ( let i = 0; i < 20; i ++ ) k0.update( 0.016, 1 ); } );

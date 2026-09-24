@@ -1,10 +1,26 @@
-import { GPU, RenderTarget, MeshRenderer, SunShadows, FullscreenPass, UniformBlock, G, setFrameCamera, FrameUniforms } from '../engine/webgpu.js';
+import { GPU, RenderTarget, MeshRenderer, SunShadows, FullscreenPass, UniformBlock, G, setFrameCamera, FrameUniforms, ShaderModule, SceneLighting, surfaceModule } from '../engine/webgpu.js';
 import { Matrix4, Vector3 } from '../engine/index.js';
 
 // The frame: sun shadows -> the scene into an HDR target -> one post pass (aerial haze, tone
 // mapping, grade, vignette, fades) into the output.
 
 export const SCENE_COLORS = [ 'rgba16float', 'rgba16float', 'rgba8unorm' ];
+
+// What polished metal reflects: blue sky above, a bright hazy horizon, the sunlit ground below, and
+// a soft glow toward the sun. Rough surfaces see a blurred version.
+const ENV_SPECULAR = /* wgsl */`
+fn hookEnvSpecular( R: vec3f, roughness: f32 ) -> vec3f {
+	let y = R.y;
+	let blur = 0.08 + roughness * 0.6;
+	let sky = mix( vec3f( 0.72, 0.8, 0.9 ), vec3f( 0.22, 0.4, 0.8 ), smoothstep( 0.0, 0.7, y ) ) * 1.35;
+	let ground = mix( vec3f( 0.26, 0.21, 0.14 ), vec3f( 0.11, 0.14, 0.06 ), smoothstep( 0.0, - 0.5, y ) ) * 0.9;
+	var c = mix( ground, sky, smoothstep( - blur, blur, y ) );
+	c += vec3f( 0.5, 0.48, 0.42 ) * exp( - abs( y ) / ( 0.03 + blur * 0.4 ) ) * 0.6; // horizon glint
+	let sd = max( dot( R, frame.sunDir ), 0.0 );
+	c += vec3f( 1.0, 0.9, 0.7 ) * pow( sd, mix( 60.0, 4.0, roughness ) ) * ( 1.5 - roughness );
+	return c * frame.envIntensity;
+}
+`;
 
 export class Renderer {
 
@@ -45,6 +61,7 @@ export class Renderer {
 				}
 			`,
 		} );
+		SceneLighting.set( 'envSpecular', new ShaderModule( { name: 'hook-envSpecular-tourney', deps: [ surfaceModule ], code: ENV_SPECULAR } ) );
 		this.prevViewProj = new Matrix4();
 		this.prevCamPos = new Vector3();
 		this.width = 1;

@@ -245,7 +245,7 @@ export class App {
 		this.pr = new Rider( HORSES[ this.knight.horse ] );
 		this.or = new Rider( HORSES[ this.opponent.horse ] );
 		this.plan = aiPlan( this.opponent.skill, this.rand );
-		this.aim = { h: 0.1, y: 2.2 };
+		this.aim = { h: 0.1, y: 2.24 };
 		this.braceAt = null;
 		this.aiBraceAt = null;
 		this.impactDone = false;
@@ -553,20 +553,22 @@ export class App {
 
 			case 'customize': {
 
-				if ( this.customTab === 'knight' ) {
-
-					// close on the face
-					c.pos.set( p.x + 0.1, 2.85, p.z + 2.9 );
-					c.look.set( p.x - 0.75, 2.5, p.z );
-					c.fov = 40;
-
-				} else {
-
-					c.pos.set( p.x - 0.8, 2.5, p.z + 7.6 );
-					c.look.set( p.x - 2.3, 1.85, p.z );
-					c.fov = 45;
-
-				}
+				// centre the knight in the space the panel leaves free (right of it, or above it on phones)
+				const W = window.innerWidth, H = window.innerHeight, aspect = W / H;
+				const phone = W <= 720;
+				const panel = phone ? 0 : Math.min( 0.62, 510 / W );
+				const ndcX = 2 * ( panel + ( 1 - panel ) / 2 ) - 1;
+				const face = this.customTab === 'knight';
+				c.fov = face ? 40 : 45;
+				const tanH = Math.tan( c.fov * Math.PI / 360 ) * aspect;
+				// step back until the knight (about 3.6 m tall, 2.6 m long) fits the free width
+				const free = ( 1 - panel ) * 2 * tanH;
+				const dist = face ? Math.max( 2.6, 1.0 / free ) : Math.max( 6.5, 3.6 / free, phone ? 9 : 0 );
+				const lookY = face ? 2.62 : phone ? 1.2 : 1.85;
+				const shift = ndcX * tanH * dist;
+				const fx = face ? p.x + 0.1 : p.x - 0.8;
+				c.pos.set( fx, face ? 2.8 : 2.5, p.z + dist );
+				c.look.set( fx - shift, lookY, p.z );
 				break;
 
 			}

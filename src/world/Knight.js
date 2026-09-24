@@ -1,6 +1,7 @@
 import { Group, Mesh, BoxGeometry, CylinderGeometry, ConeGeometry, SphereGeometry, TorusGeometry, BufferGeometry, Float32BufferAttribute, Vector3, Quaternion, Matrix4, Color } from '../engine/index.js';
 import { Material } from '../engine/webgpu.js';
 import { heraldryAtlas, ATLAS_SLOTS } from './Materials.js';
+import { buildHorse, buildRider, SEAT_Y } from './KnightModel.js';
 import { HORSES, ARMOURS, PLUMES, SKINS, HAIRS } from '../game/Options.js';
 
 // A mounted knight, built from primitives: horse with caparison, rider in plate with a surcoat,
@@ -12,8 +13,7 @@ import { HORSES, ARMOURS, PLUMES, SKINS, HAIRS } from '../game/Options.js';
 const Y = new Vector3( 0, 1, 0 );
 const _v = new Vector3(), _q = new Quaternion(), _m = new Matrix4();
 
-// seat of the rider above the ground, and the lance grip / zones used by the joust
-export const SEAT_Y = 1.8;
+export { SEAT_Y };
 
 let _shared = null;
 function shared() {
@@ -27,6 +27,9 @@ function shared() {
 		mail: new Material( { name: 'mail', color: 0x5a5c62, metalness: 0.9, roughness: 0.55,
 			surface: 's.roughness = 0.45 + 0.25 * step( 0.5, fract( in.uv.x * 90.0 + step( 0.5, fract( in.uv.y * 40.0 ) ) * 0.5 ) );' } ),
 		wood: new Material( { name: 'lanceWood', color: 0x8a6440, roughness: 0.6 } ),
+		eye: new Material( { name: 'eye', color: 0x0a0806, roughness: 0.08 } ),
+		hoof: new Material( { name: 'hoof', color: 0x2a2420, roughness: 0.55 } ),
+		lips: new Material( { name: 'lips', color: 0x8a4a3a, roughness: 0.6 } ),
 	};
 	return _shared;
 
@@ -138,9 +141,11 @@ export class Knight {
 		this.shieldBrace = 0;
 		this.recoil = 0; // 0..1 after being struck
 
+		this.shared = shared();
+		this.shieldGeometry = shieldGeometry();
 		this.makeMaterials();
-		this.buildHorse();
-		this.buildRider();
+		buildHorse( this );
+		buildRider( this );
 		this.buildLance();
 		this.apply( options );
 
@@ -148,8 +153,8 @@ export class Knight {
 
 	makeMaterials() {
 
-		const cloth = ( name, extraVertex = '' ) => new Material( {
-			name, roughness: 0.85, side: 'double',
+		const cloth = ( name, extraVertex = '', hem = false ) => new Material( {
+			name, roughness: 0.85, side: 'double', alphaTest: hem ? 0.5 : 0,
 			textures: { heraldry: heraldryAtlas },
 			uniforms: { slot: [ 'f32', this.slot ], speed: [ 'f32', 0 ] },
 			vertex: extraVertex,
@@ -157,10 +162,27 @@ export class Knight {
 				let u = ( mat.slot + 0.02 + fract( in.uv.x ) * 0.96 ) / ${ ATLAS_SLOTS.toFixed( 1 ) };
 				let t = textureSample( heraldry, smpLinearClamp, vec2f( u, clamp( 1.0 - in.uv.y, 0.0, 1.0 ) ) );
 				s.albedo = t.rgb;
+				// woven cloth: a faint weave and soft folds catch the light
+				s.albedo *= 0.94 + 0.06 * sin( in.uv.x * 900.0 ) * sin( in.uv.y * 700.0 );
+				${ hem ? `
+				// a scalloped (dagged) hem with a gold border above it
+				let sc = 0.045 * ( 0.5 + 0.5 * cos( fract( in.uv.x ) * 6.2831853 * 7.0 ) );
+				s.alpha = select( 1.0, 0.0, in.uv.y < sc );
+				if ( in.uv.y < sc + 0.07 && in.uv.y > sc + 0.02 ) { s.albedo = vec3f( 0.72, 0.52, 0.16 ); s.metalness = 0.8; s.roughness = 0.35; }
+				` : '' }
 			`,
 		} );
 		this.mats = {
-			armour: new Material( { name: 'armour', color: 0xcccccc, metalness: 1, roughness: 0.25 } ),
+			armour: new Material( { name: 'armour', color: 0xcccccc, metalness: 1, roughness: 0.25,
+				surface: /* wgsl */`
+					// hammered plate: roughness and tone vary a little over the surface
+					let n = mx_noise_float3( in.P * 14.0 ) * 0.5 + 0.5;
+					s.roughness = clamp( mat.roughness * ( 0.75 + 0.5 * n ), 0.05, 1.0 );
+					s.albedo *= 0.92 + 0.08 * n;
+				`,
+			} ),
+			mantling: new Material( { name: 'mantling', roughness: 0.85, side: 'double',
+				vertex: 'v.position.z += sin( frame.time * 2.3 + v.position.x * 9.0 ) * 0.012 * clamp( - v.position.y * 3.0, 0.0, 1.0 );' } ),
 			// caparison: the skirt streams back and ripples with speed (uv.y = 0 at the hem)
 			cloth: cloth( 'caparison', /* wgsl */`
 				let hem = 1.0 - v.uv.y;
@@ -169,7 +191,7 @@ export class Knight {
 				v.position.y += hem * hem * sp * 0.08;
 				let r = sin( frame.time * ( 4.0 + sp * 9.0 ) + v.uv.x * 40.0 ) * ( 0.012 + 0.03 * sp ) * hem;
 				v.position += v.normal * r;
-			` ),
+			`, true ),
 			surcoat: cloth( 'surcoat' ),
 			shield: new Material( {
 				name: 'shield', roughness: 0.45,
@@ -207,237 +229,6 @@ export class Knight {
 				`,
 			} ),
 		};
-
-	}
-
-	// ------------------------------------------------------------------------------ horse
-
-	buildHorse() {
-
-		const M = this.mats, S = shared();
-		const horse = new Group();
-		this.group.add( horse );
-		this.horse = horse;
-		const body = new Group(); // bobs with the gait
-		horse.add( body );
-		this.body = body;
-
-		mesh( new SphereGeometry( 1, 20, 14 ), M.coat, body, { p: [ 0, 1.32, 0 ], s: [ 0.95, 0.42, 0.36 ] } );
-		mesh( new SphereGeometry( 1, 16, 12 ), M.coat, body, { p: [ 0.52, 1.36, 0 ], s: [ 0.44, 0.44, 0.34 ] } );
-		mesh( new SphereGeometry( 1, 16, 12 ), M.coat, body, { p: [ - 0.56, 1.37, 0 ], s: [ 0.45, 0.43, 0.37 ] } );
-
-		// neck and head
-		const neck = new Group();
-		neck.position.set( 0.7, 1.5, 0 );
-		body.add( neck );
-		this.neck = neck;
-		mesh( limbGeo( V( 0, 0, 0 ), V( 0.38, 0.56, 0 ), 0.27, 0.15, 14 ), M.coat, neck );
-		mesh( limbGeo( V( - 0.02, 0.2, 0 ), V( 0.33, 0.68, 0 ), 0.06, 0.04, 6 ), M.mane, neck, { s: [ 1, 1, 0.6 ] } ); // mane
-		const head = new Group();
-		head.position.set( 0.38, 0.58, 0 );
-		neck.add( head );
-		this.head = head;
-		const dir = V( 0.62, - 0.78, 0 );
-		mesh( limbGeo( V( - 0.04, 0.05, 0 ), dir.clone().multiplyScalar( 0.58 ), 0.12, 0.085, 12 ), M.coat, head, { s: [ 1, 1, 0.85 ] } );
-		mesh( new SphereGeometry( 0.1, 10, 8 ), M.coat, head, { p: [ 0.37, - 0.45, 0 ], s: [ 1, 0.9, 0.8 ] } ); // muzzle
-		this.blaze = mesh( limbGeo( V( 0.08, 0.02, 0 ), V( 0.36, - 0.36, 0 ), 0.03, 0.02, 6 ), S.white, head, { p: [ 0.02, 0, 0 ], s: [ 1, 1, 0.3 ], shadow: false } );
-		for ( const z of [ - 1, 1 ] ) {
-
-			mesh( new ConeGeometry( 0.035, 0.14, 6 ), M.coat, head, { p: [ - 0.04, 0.16, z * 0.06 ], r: [ z * 0.2, 0, 0.2 ] } );
-			mesh( new SphereGeometry( 0.022, 8, 6 ), S.dark, head, { p: [ 0.1, - 0.04, z * 0.085 ], shadow: false } );
-
-		}
-
-		// chanfron (face armour) and bridle
-		this.chanfron = mesh( limbGeo( V( 0.02, 0.1, 0 ), V( 0.3, - 0.3, 0 ), 0.1, 0.075, 8, ), M.armour, head, { p: [ 0.03, 0, 0 ], s: [ 1, 1, 0.9 ] } );
-		mesh( new ConeGeometry( 0.02, 0.18, 6 ), M.armour, head, { p: [ 0.12, 0.02, 0 ], r: [ 0, 0, - 0.9 ] } ); // spike
-		mesh( new TorusGeometry( 0.1, 0.012, 6, 14 ), S.leather, head, { p: [ 0.3, - 0.36, 0 ], r: [ 0, Math.PI / 2, 0.7 ], shadow: false } );
-		// reins to the rider's hands
-		mesh( limbGeo( V( 0.68, 1.66, 0 ), V( 1.35, 1.72, 0 ), 0.012, 0.012, 4 ), S.leather, body, { shadow: false } );
-
-		// legs: hip pivot -> upper leg -> knee pivot -> cannon (sock colour) -> hoof
-		this.legs = [];
-		const legDefs = [
-			{ x: 0.55, z: 0.17, front: true }, { x: 0.55, z: - 0.17, front: true },
-			{ x: - 0.62, z: 0.19, front: false }, { x: - 0.62, z: - 0.19, front: false },
-		];
-		for ( const d of legDefs ) {
-
-			const hip = new Group();
-			hip.position.set( d.x, 1.2, d.z );
-			body.add( hip );
-			mesh( limbGeo( V( 0, 0.1, 0 ), V( 0, - 0.5, 0 ), d.front ? 0.12 : 0.15, 0.07, 10 ), M.coat, hip );
-			const knee = new Group();
-			knee.position.set( 0, - 0.5, 0 );
-			hip.add( knee );
-			mesh( limbGeo( V( 0, 0.02, 0 ), V( 0, - 0.5, 0 ), 0.065, 0.05, 8 ), M.socks, knee );
-			mesh( new CylinderGeometry( 0.06, 0.075, 0.1, 10 ), S.dark, knee, { p: [ 0.01, - 0.55, 0 ] } );
-			this.legs.push( { hip, knee, ...d } );
-
-		}
-
-		// tail
-		const tail = new Group();
-		tail.position.set( - 0.98, 1.55, 0 );
-		body.add( tail );
-		this.tail = tail;
-		mesh( limbGeo( V( 0, 0, 0 ), V( - 0.16, - 0.3, 0 ), 0.06, 0.08, 8 ), M.mane, tail );
-		mesh( limbGeo( V( - 0.16, - 0.3, 0 ), V( - 0.2, - 0.85, 0 ), 0.08, 0.03, 8 ), M.mane, tail );
-
-		// caparison: an elliptical skirt from the back to below the knees, and a crupper over the rump
-		const skirt = new CylinderGeometry( 0.9, 1.04, 0.84, 40, 6, true );
-		skirt.translate( 0, 0.42, 0 );
-		const uv = skirt.attributes.uv.array;
-		for ( let i = 0; i < uv.length; i += 2 ) uv[ i ] *= 4; // four panels: flank, front, flank, back
-		const cap = mesh( skirt, M.cloth, body, { p: [ - 0.04, 0.84, 0 ], s: [ 1.04, 1, 0.46 ] } );
-		cap.frustumCulled = false;
-		this.caparison = cap;
-		const top = new SphereGeometry( 1, 28, 8, 0, Math.PI * 2, 0, Math.PI / 2 );
-		mesh( top, M.cloth, body, { p: [ - 0.04, 1.66, 0 ], s: [ 0.94, 0.14, 0.415 ] } );
-
-		// saddle
-		mesh( new BoxGeometry( 0.55, 0.1, 0.44 ), S.leather, body, { p: [ - 0.05, 1.77, 0 ] } );
-		mesh( new BoxGeometry( 0.08, 0.34, 0.42 ), S.leather, body, { p: [ - 0.32, 1.9, 0 ], r: [ 0, 0, 0.2 ] } ); // cantle
-		mesh( new BoxGeometry( 0.08, 0.2, 0.3 ), S.leather, body, { p: [ 0.22, 1.86, 0 ], r: [ 0, 0, - 0.2 ] } ); // pommel
-
-	}
-
-	// ------------------------------------------------------------------------------ rider
-
-	buildRider() {
-
-		const M = this.mats, S = shared();
-		const rider = new Group();
-		rider.position.set( - 0.04, SEAT_Y, 0 );
-		this.body.add( rider );
-		this.rider = rider;
-
-		// legs astride
-		for ( const z of [ - 1, 1 ] ) {
-
-			mesh( limbGeo( V( 0.02, 0.05, z * 0.14 ), V( 0.34, - 0.2, z * 0.36 ), 0.085, 0.07 ), M.armour, rider );
-			mesh( new SphereGeometry( 0.075, 10, 8 ), M.armour, rider, { p: [ 0.34, - 0.2, z * 0.36 ] } );
-			mesh( limbGeo( V( 0.34, - 0.2, z * 0.36 ), V( 0.24, - 0.72, z * 0.4 ), 0.065, 0.055 ), M.armour, rider );
-			mesh( new BoxGeometry( 0.26, 0.07, 0.09 ), M.armour, rider, { p: [ 0.3, - 0.76, z * 0.4 ], r: [ 0, 0, - 0.1 ] } );
-			mesh( new TorusGeometry( 0.06, 0.012, 6, 10 ), S.gold, rider, { p: [ 0.26, - 0.78, z * 0.4 ], r: [ Math.PI / 2, 0, 0 ], shadow: false } );
-			mesh( limbGeo( V( 0.26, - 0.72, z * 0.4 ), V( 0.02, - 0.05, z * 0.26 ), 0.01, 0.01, 4 ), S.leather, rider, { shadow: false } );
-
-		}
-
-		// torso: plate, surcoat over it, skirt of the surcoat
-		mesh( limbGeo( V( 0, 0.02, 0 ), V( 0, 0.62, 0 ), 0.19, 0.22, 14 ), M.armour, rider, { s: [ 1, 1, 1.15 ] } );
-		const coat = new CylinderGeometry( 0.235, 0.26, 0.5, 20, 1, true );
-		const cuv = coat.attributes.uv.array;
-		for ( let i = 0; i < cuv.length; i += 2 ) cuv[ i ] = cuv[ i ] * 2 + 0.25; // arms on front and back
-		mesh( coat, M.surcoat, rider, { p: [ 0.0, 0.3, 0 ], s: [ 1, 1, 1.1 ], r: [ 0, 0, 0 ] } );
-		mesh( new CylinderGeometry( 0.26, 0.34, 0.2, 20, 1, true ), M.surcoat, rider, { p: [ 0, - 0.02, 0 ], s: [ 1, 1, 1.15 ] } );
-		mesh( new CylinderGeometry( 0.2, 0.2, 0.05, 16 ), S.leather, rider, { p: [ 0, 0.14, 0 ], s: [ 1.2, 1, 1.35 ] } ); // belt
-		mesh( new CylinderGeometry( 0.1, 0.16, 0.12, 12 ), M.armour, rider, { p: [ 0, 0.68, 0 ] } ); // gorget
-
-		// shoulders
-		for ( const z of [ - 1, 1 ] ) mesh( new SphereGeometry( 1, 12, 8, 0, Math.PI * 2, 0, Math.PI * 0.6 ), M.armour, rider, { p: [ 0, 0.56, z * 0.26 ], s: [ 0.15, 0.12, 0.14 ] } );
-
-		// right arm: couches the lance under the armpit (+z is the rider's right)
-		const ra = new Group();
-		rider.add( ra );
-		this.rightArm = ra;
-		mesh( limbGeo( V( 0, 0.55, 0.27 ), V( - 0.1, 0.3, 0.29 ), 0.065, 0.06 ), M.armour, ra );
-		mesh( new SphereGeometry( 0.065, 10, 8 ), M.armour, ra, { p: [ - 0.1, 0.3, 0.29 ] } );
-		mesh( limbGeo( V( - 0.1, 0.3, 0.29 ), V( 0.18, 0.32, 0.22 ), 0.055, 0.05 ), M.armour, ra );
-		mesh( new SphereGeometry( 0.06, 10, 8 ), M.armour, ra, { p: [ 0.2, 0.32, 0.22 ] } );
-		this.grip = new Group();
-		this.grip.position.set( 0.2, 0.32, 0.22 );
-		ra.add( this.grip );
-
-		// left arm: holds the reins, the shield strapped to it
-		mesh( limbGeo( V( 0, 0.55, - 0.27 ), V( 0.08, 0.32, - 0.3 ), 0.065, 0.06 ), M.armour, rider );
-		mesh( limbGeo( V( 0.08, 0.32, - 0.3 ), V( 0.34, 0.22, - 0.1 ), 0.055, 0.05 ), M.armour, rider );
-		mesh( new SphereGeometry( 0.06, 10, 8 ), M.armour, rider, { p: [ 0.35, 0.22, - 0.09 ] } );
-		const sh = new Group();
-		sh.position.set( 0.16, 0.42, - 0.33 );
-		rider.add( sh );
-		this.shieldGroup = sh;
-		const shield = mesh( shieldGeometry(), M.shield, sh );
-		shield.rotation.set( 0, Math.PI / 2, 0 ); // front faces +x
-		this.shield = shield;
-		this.shieldRest = { ry: - 0.55, rz: 0.1 };
-
-		// head and helms
-		const head = new Group();
-		head.position.set( 0.01, 0.87, 0 );
-		rider.add( head );
-		this.riderHead = head;
-		this.buildHead( head );
-
-	}
-
-	buildHead( head ) {
-
-		const M = this.mats, S = shared();
-		// the face, visible under an open helm or when the helm comes off
-		const face = new Group();
-		head.add( face );
-		this.face = face;
-		mesh( new SphereGeometry( 0.11, 16, 12 ), M.skin, face, { s: [ 1, 1.12, 0.95 ] } );
-		mesh( new ConeGeometry( 0.022, 0.06, 6 ), M.skin, face, { p: [ 0.115, 0.0, 0 ], r: [ 0, 0, - Math.PI / 2 - 0.3 ] } );
-		for ( const z of [ - 1, 1 ] ) {
-
-			mesh( new SphereGeometry( 0.016, 8, 6 ), S.white, face, { p: [ 0.093, 0.03, z * 0.038 ], shadow: false } );
-			mesh( new SphereGeometry( 0.009, 6, 4 ), S.dark, face, { p: [ 0.106, 0.03, z * 0.038 ], shadow: false } );
-			mesh( new SphereGeometry( 0.025, 8, 6 ), M.skin, face, { p: [ 0.0, 0.0, z * 0.108 ], s: [ 0.6, 1, 0.5 ] } ); // ears
-
-		}
-
-		this.hairCap = mesh( new SphereGeometry( 0.118, 16, 10, 0, Math.PI * 2, 0, Math.PI * 0.52 ), M.hair, face, { p: [ - 0.012, 0.02, 0 ], s: [ 1, 1.12, 1 ], r: [ 0, 0, 0.35 ] } );
-		this.beards = [
-			null,
-			mesh( new SphereGeometry( 0.112, 14, 8, 0, Math.PI, Math.PI * 0.55, Math.PI * 0.45 ), M.hair, face, { p: [ 0.012, 0.01, 0 ], r: [ 0, Math.PI / 2, 0 ], s: [ 1, 1.15, 1.0 ] } ),
-			mesh( new SphereGeometry( 0.118, 14, 8, 0, Math.PI, Math.PI * 0.52, Math.PI * 0.48 ), M.hair, face, { p: [ 0.03, 0.01, 0 ], r: [ 0, Math.PI / 2, 0 ], s: [ 1, 1.45, 1.08 ] } ),
-			mesh( new TorusGeometry( 0.035, 0.012, 6, 10, Math.PI ), M.hair, face, { p: [ 0.108, - 0.035, 0 ], r: [ 0, Math.PI / 2, 0 ] } ),
-		];
-
-		// helms: all built once, one visible
-		const A = M.armour;
-		this.helms = {};
-		const slit = ( g, y, x = 0.15, w = 0.2 ) => mesh( new BoxGeometry( 0.03, 0.022, w ), S.dark, g, { p: [ x, y, 0 ], shadow: false } );
-
-		let g = new Group(); head.add( g ); this.helms.greathelm = g;
-		mesh( new CylinderGeometry( 0.145, 0.15, 0.34, 18 ), A, g, { p: [ 0, 0.01, 0 ], s: [ 1.05, 1, 1 ] } );
-		mesh( new SphereGeometry( 0.148, 18, 6, 0, Math.PI * 2, 0, Math.PI * 0.3 ), A, g, { p: [ 0, 0.14, 0 ], s: [ 1.05, 0.7, 1 ] } );
-		slit( g, 0.04 ); slit( g, 0.0 );
-		mesh( new BoxGeometry( 0.02, 0.16, 0.03 ), S.gold, g, { p: [ 0.158, - 0.08, 0 ] } );
-		mesh( new BoxGeometry( 0.02, 0.03, 0.12 ), S.gold, g, { p: [ 0.158, - 0.08, 0 ] } );
-
-		g = new Group(); head.add( g ); this.helms.frogmouth = g;
-		mesh( new CylinderGeometry( 0.13, 0.17, 0.3, 18 ), A, g, { p: [ - 0.01, - 0.04, 0 ] } );
-		mesh( new SphereGeometry( 0.14, 18, 10, 0, Math.PI * 2, 0, Math.PI * 0.5 ), A, g, { p: [ - 0.02, 0.1, 0 ], s: [ 1.25, 0.9, 1 ] } );
-		mesh( new ConeGeometry( 0.13, 0.22, 4 ), A, g, { p: [ 0.13, 0.08, 0 ], r: [ 0, Math.PI / 4, - Math.PI / 2 ], s: [ 1, 1, 0.45 ] } ); // the beak over the sight
-		slit( g, 0.05, 0.12, 0.22 );
-
-		g = new Group(); head.add( g ); this.helms.hounskull = g;
-		mesh( new SphereGeometry( 0.14, 18, 12 ), A, g, { p: [ 0, 0.03, 0 ], s: [ 1.05, 1.1, 1 ] } );
-		mesh( new ConeGeometry( 0.08, 0.14, 12 ), A, g, { p: [ 0, 0.2, 0 ], r: [ 0, 0, 0.35 ] } );
-		mesh( new ConeGeometry( 0.1, 0.24, 14 ), A, g, { p: [ 0.17, - 0.01, 0 ], r: [ 0, 0, - Math.PI / 2 ], s: [ 1, 1, 0.9 ] } );
-		for ( const z of [ - 1, 1 ] ) mesh( new BoxGeometry( 0.02, 0.018, 0.07 ), S.dark, g, { p: [ 0.15, 0.05, z * 0.05 ], r: [ 0, z * 0.5, 0 ], shadow: false } );
-		mesh( new CylinderGeometry( 0.13, 0.26, 0.2, 18 ), S.mail, g, { p: [ - 0.01, - 0.16, 0 ] } ); // aventail
-
-		g = new Group(); head.add( g ); this.helms.armet = g;
-		mesh( new SphereGeometry( 0.145, 18, 12 ), A, g, { p: [ - 0.01, 0.02, 0 ], s: [ 1.05, 1.15, 1 ] } );
-		mesh( new SphereGeometry( 0.12, 16, 10, 0, Math.PI, 0, Math.PI ), A, g, { p: [ 0.05, - 0.02, 0 ], r: [ 0, - Math.PI / 2, 0 ], s: [ 1, 1.05, 1.25 ] } );
-		slit( g, 0.035, 0.155, 0.18 );
-		mesh( new CylinderGeometry( 0.05, 0.05, 0.02, 12 ), A, g, { p: [ - 0.16, - 0.06, 0 ], r: [ 0, 0, Math.PI / 2 ] } ); // rondel
-		mesh( new BoxGeometry( 0.03, 0.26, 0.02 ), S.gold, g, { p: [ - 0.02, 0.1, 0 ], r: [ 0, 0, - 0.9 ] } ); // comb
-
-		g = new Group(); head.add( g ); this.helms.barbute = g;
-		mesh( new SphereGeometry( 0.145, 18, 12, Math.PI * 0.72, Math.PI * 1.56, 0, Math.PI * 0.72 ), A, g, { p: [ 0, 0.02, 0 ], s: [ 1.02, 1.15, 1.02 ] } );
-		mesh( new BoxGeometry( 0.03, 0.12, 0.02 ), A, g, { p: [ 0.135, 0.06, 0 ] } ); // nasal
-
-		// plume on top, streaming back
-		const pl = new Group();
-		pl.position.set( - 0.02, 0.2, 0 );
-		head.add( pl );
-		this.plume = pl;
-		for ( let i = 0; i < 5; i ++ ) mesh( new SphereGeometry( 0.07 - i * 0.008, 10, 8 ), M.plume, pl, { p: [ - i * 0.06, 0.04 + Math.sin( i * 0.8 ) * 0.05, 0 ], s: [ 1.3, 0.8, 0.7 ] } );
 
 	}
 
@@ -487,10 +278,12 @@ export class Knight {
 		this.beards.forEach( ( b, i ) => b && ( b.visible = i === o.beard ) );
 		for ( const k in this.helms ) this.helms[ k ].visible = k === o.helm && ! this.helmOff;
 		this.face.visible = this.helmOff || o.helm === 'barbute';
+		this.crest.visible = ! this.helmOff;
 		this.plume.visible = this.plume.visible && ! this.helmOff;
 		const tint = ( id ) => new Color( 'rgb(' + ( { or: '214,166,38', argent: '236,232,222', gules: '172,28,32', azure: '30,62,150', vert: '28,108,50', sable: '24,22,24', purpure: '104,40,122', tenne: '196,98,26' }[ id ] || '236,232,222' ) + ')' );
 		M.lance.uniforms.c1.value.copy( tint( o.arms.field[ 0 ] ) );
 		M.lance.uniforms.c2.value.copy( tint( o.arms.field[ 1 ] === o.arms.field[ 0 ] ? 'argent' : o.arms.field[ 1 ] ) );
+		M.mantling.uniforms.color.value.copy( tint( o.arms.field[ 0 ] ) );
 
 	}
 
