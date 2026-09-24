@@ -4,6 +4,8 @@ A medieval jousting tournament for the browser. Choose your horse, paint your ar
 and helm, then ride against five champions of the realm, one after another. Beat them all and the crowd
 crowns you Champion.
 
+**Play it: https://knownasilya.github.io/jousting/** (needs a browser with WebGPU)
+
 It runs on WebGPU with a small rendering engine borrowed from [Tidewater](https://github.com/dgreenheck/tidewater).
 The sky is a real one: a CC0 HDRI panorama from [Poly Haven](https://polyhaven.com/a/quarry_01) lights the scene
 and shows in every reflection on the plate armour. Everything else (knights, horses, crowd, woods, terrain, the

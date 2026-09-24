@@ -1,6 +1,8 @@
 {
   "name": "jousting",
   "version": "0.1.0",
+  "homepage": "https://knownasilya.github.io/jousting/",
+  "repository": { "type": "git", "url": "https://github.com/knownasilya/jousting.git" },
   "scripts": {
     "dev": "vite --host 127.0.0.1 --port 5190",
     "build": "vite build",
