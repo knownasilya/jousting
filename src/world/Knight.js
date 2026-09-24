@@ -123,6 +123,42 @@ function shieldGeometry() {
 
 }
 
+// The coat: short hair over muscle. Fine hair streaks and a soft sheen; the normal rolls gently
+// over the muscles; dapples for the greys. On the head the muzzle and the skin round the eyes are
+// darker and finer-haired. Local space, so nothing swims as the horse moves.
+function coatMaterial( name, head ) {
+
+	return new Material( {
+		name, roughness: 0.62, uniforms: { dapple: [ 'f32', 0 ] },
+		varyings: { vLocal: 'vec3f' },
+		vertex: 'o.vLocal = v.position;',
+		surface: /* wgsl */`
+			let q = in.vs.vLocal;
+			let n = mx_noise_float3( q * 9.0 ) * 0.5 + 0.5;
+			let spots = smoothstep( 0.45, 0.62, n );
+			s.albedo = s.albedo * mix( 1.0, 0.7 + 0.6 * spots, mat.dapple );
+			let hair = mx_noise_float3( vec3f( q.x * 25.0, q.y * 260.0, q.z * 260.0 ) ) * 0.5 + 0.5;
+			let tone = mx_noise_float3( q * 2.2 + 4.0 ) * 0.5 + 0.5;
+			s.albedo *= ( 0.86 + 0.14 * hair ) * ( 0.8 + 0.4 * tone );
+			let m = vec3f( mx_noise_float3( q * 3.5 ), mx_noise_float3( q * 3.5 + 11.0 ), mx_noise_float3( q * 3.5 + 23.0 ) );
+			s.normal = normalize( s.normal + m * 0.22 );
+			s.roughness = mat.roughness * ( 0.8 + 0.4 * hair );
+			${ head ? `
+			// the muzzle: dark, soft skin with a velvet sheen; darker skin round the eyes
+			let dm = length( q.xy - vec2f( 0.32, -0.5 ) );
+			let muzzle = 1.0 - smoothstep( 0.05, 0.17, dm );
+			let de = length( vec2f( length( q.xy - vec2f( 0.06, -0.05 ) ), abs( q.z ) - 0.095 ) );
+			let eye = 1.0 - smoothstep( 0.02, 0.05, de );
+			s.albedo = mix( s.albedo, vec3f( 0.035, 0.028, 0.025 ) + s.albedo * 0.25, max( muzzle * 0.85, eye * 0.7 ) );
+			s.roughness = mix( s.roughness, 0.45, muzzle );
+			` : '' }
+			s.sheenColor = s.albedo * 0.7 + vec3f( 0.02 );
+			s.sheenRoughness = 0.45;
+		`,
+	} );
+
+}
+
 export class Knight {
 
 	constructor( options, slot ) {
@@ -213,27 +249,8 @@ export class Knight {
 					s.albedo = t.rgb * ( 0.8 + 0.2 * smoothstep( 0.0, 0.12, e ) );
 				`,
 			} ),
-			// the coat: short glossy hair over muscle. Fine hair streaks and a soft sheen; the normal
-			// rolls gently over the muscles; dapples for the greys (local space, so nothing swims)
-			coat: new Material( {
-				name: 'coat', roughness: 0.48, uniforms: { dapple: [ 'f32', 0 ] },
-				varyings: { vLocal: 'vec3f' },
-				vertex: 'o.vLocal = v.position;',
-				surface: /* wgsl */`
-					let q = in.vs.vLocal;
-					let n = mx_noise_float3( q * 9.0 ) * 0.5 + 0.5;
-					let spots = smoothstep( 0.45, 0.62, n );
-					s.albedo = s.albedo * mix( 1.0, 0.7 + 0.6 * spots, mat.dapple );
-					let hair = mx_noise_float3( vec3f( q.x * 25.0, q.y * 260.0, q.z * 260.0 ) ) * 0.5 + 0.5;
-					let tone = mx_noise_float3( q * 2.2 + 4.0 ) * 0.5 + 0.5;
-					s.albedo *= ( 0.9 + 0.1 * hair ) * ( 0.85 + 0.3 * tone );
-					let m = vec3f( mx_noise_float3( q * 3.5 ), mx_noise_float3( q * 3.5 + 11.0 ), mx_noise_float3( q * 3.5 + 23.0 ) );
-					s.normal = normalize( s.normal + m * 0.22 );
-					s.roughness = mat.roughness * ( 0.85 + 0.3 * hair );
-					s.sheenColor = s.albedo * 0.9 + vec3f( 0.04 );
-					s.sheenRoughness = 0.4;
-				`,
-			} ),
+			coat: coatMaterial( 'coat', false ),
+			coatHead: coatMaterial( 'coatHead', true ),
 			// mane and tail: coarse hair in strands
 			mane: new Material( { name: 'mane', roughness: 0.6,
 				varyings: { vLocal: 'vec3f' },
@@ -298,8 +315,12 @@ export class Knight {
 		this.options = o;
 		const M = this.mats;
 		const horse = HORSES[ o.horse ], arm = ARMOURS[ o.armour ];
-		M.coat.uniforms.color.value.set( horse.coat );
-		M.coat.uniforms.dapple.value = horse.dapple ? 1 : 0;
+		for ( const m of [ M.coat, M.coatHead ] ) {
+
+			m.uniforms.color.value.set( horse.coat );
+			m.uniforms.dapple.value = horse.dapple ? 1 : 0;
+
+		}
 		M.mane.uniforms.color.value.set( horse.mane );
 		M.socks.uniforms.color.value.set( horse.socks ? 0xd8d2c6 : horse.points ? 0x16110e : horse.coat );
 		this.blaze.visible = !! horse.blaze;

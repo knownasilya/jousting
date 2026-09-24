@@ -158,7 +158,8 @@ export function buildCrowd( spots, material ) {
 	}
 
 	mesh.frustumCulled = false;
-	mesh.castShadow = true;
+	// no shadows cast: most of the crowd is under the awnings, and it is the heaviest mesh drawn
+	mesh.castShadow = false;
 	mesh.receiveShadow = true;
 	return mesh;
 
