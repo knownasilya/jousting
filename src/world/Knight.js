@@ -391,8 +391,8 @@ export class Knight {
 		this.hairCap = mesh( new SphereGeometry( 0.118, 16, 10, 0, Math.PI * 2, 0, Math.PI * 0.52 ), M.hair, face, { p: [ - 0.012, 0.02, 0 ], s: [ 1, 1.12, 1 ], r: [ 0, 0, 0.35 ] } );
 		this.beards = [
 			null,
-			mesh( new SphereGeometry( 0.112, 14, 8, 0, Math.PI, Math.PI * 0.55, Math.PI * 0.45 ), M.hair, face, { p: [ 0.012, 0.01, 0 ], r: [ 0, - Math.PI / 2, 0 ], s: [ 1, 1.15, 1.0 ] } ),
-			mesh( new SphereGeometry( 0.118, 14, 8, 0, Math.PI, Math.PI * 0.52, Math.PI * 0.48 ), M.hair, face, { p: [ 0.03, 0.01, 0 ], r: [ 0, - Math.PI / 2, 0 ], s: [ 1, 1.45, 1.08 ] } ),
+			mesh( new SphereGeometry( 0.112, 14, 8, 0, Math.PI, Math.PI * 0.55, Math.PI * 0.45 ), M.hair, face, { p: [ 0.012, 0.01, 0 ], r: [ 0, Math.PI / 2, 0 ], s: [ 1, 1.15, 1.0 ] } ),
+			mesh( new SphereGeometry( 0.118, 14, 8, 0, Math.PI, Math.PI * 0.52, Math.PI * 0.48 ), M.hair, face, { p: [ 0.03, 0.01, 0 ], r: [ 0, Math.PI / 2, 0 ], s: [ 1, 1.45, 1.08 ] } ),
 			mesh( new TorusGeometry( 0.035, 0.012, 6, 10, Math.PI ), M.hair, face, { p: [ 0.108, - 0.035, 0 ], r: [ 0, Math.PI / 2, 0 ] } ),
 		];
 
